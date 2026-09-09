@@ -911,7 +911,8 @@ const foldOpen=new Set();
 function foldHidden(entries){const h=entries.length-1-FOLD_TAIL;return h>=FOLD_MIN_HIDDEN?h:0;}
 function threadHtml(c,addressed){
   const entries=c.thread||[];
-  const hidden=foldOpen.has(c.comment_id)?0:foldHidden(entries);
+  const foldable=foldHidden(entries), open=foldOpen.has(c.comment_id);
+  const hidden=open?0:foldable;
   // data-idx is the entry's index in c.thread, not its position after folding, so anything keyed
   // on it (the clamp state) stays put when the fold opens.
   const entryHtml=(e,i)=>{
@@ -926,13 +927,16 @@ function threadHtml(c,addressed){
       +(e.ts?'<span class="gts">'+esc(ago(e.ts))+'</span>':'')+'</div>'
       +'<div class="gtext">'+mdComment(e.text||'')+'</div></div>';
   };
-  const parts=[];
-  if(hidden){
-    parts.push(entryHtml(entries[0],0));
-    parts.push('<button class="gfold" type="button" data-act="unfold" aria-expanded="false">'+hidden+' earlier replies</button>');
+  // One toggle in both states (a disclosure control: it stays put and flips aria-expanded), so
+  // an expanded thread can be folded again without a reload. It sits after the root entry.
+  const toggle=foldable?'<button class="gfold" type="button" data-act="fold" aria-expanded="'+(open?'true':'false')+'">'
+    +(open?'Hide '+foldable+' earlier replies':foldable+' earlier replies')+'</button>':'';
+  const parts=[entryHtml(entries[0],0)];
+  if(entries.length>1){
+    parts.push(toggle);
     entries.slice(1+hidden).forEach((e,k)=>parts.push(entryHtml(e,1+hidden+k)));
-  }else entries.forEach((e,i)=>parts.push(entryHtml(e,i)));
-  return '<div class="gthread">'+parts.join('')+'</div>';
+  }
+  return '<div class="gthread">'+(entries.length?parts.join(''):'')+'</div>';
 }
 // #387: per-entry clamp. Entries other than the newest are cut by rendered height, never by
 // character count, so a markdown list or code block is not split mid-item, behind a "Show more"
@@ -951,15 +955,21 @@ function applyClamps(root){
     if(!text||text.offsetParent===null)return;      // not laid out yet (hidden panel): decide when shown
     en.classList.remove('clampable');
     const card=en.closest('[data-id]');const key=(card?card.dataset.id:'')+':'+en.dataset.idx;
-    if(clampOpen.has(key))return;
     const lh=parseFloat(getComputedStyle(text).lineHeight)||19.5;
     if(!needsClamp(text.scrollHeight,lh))return;
-    en.classList.add('clamped');text.style.maxHeight=(CLAMP_LINES*lh)+'px';
+    // One toggle in both states (Show more / Show less); it stays put, so keyboard focus stays on it.
     const b=document.createElement('button');b.type='button';b.className='gmore';b.dataset.act='more';
-    b.setAttribute('aria-expanded','false');b.textContent='Show more';
+    const set=on=>{
+      en.classList.toggle('clamped',on);text.style.maxHeight=on?(CLAMP_LINES*lh)+'px':'';
+      b.setAttribute('aria-expanded',on?'false':'true');b.textContent=on?'Show more':'Show less';
+    };
+    set(!clampOpen.has(key));
     b.onclick=e=>{
-      e.stopPropagation();clampOpen.add(key);en.classList.remove('clamped');text.style.maxHeight='';b.remove();layoutComments();
-      text.tabIndex=-1;text.focus({preventScroll:true});   // the button is gone; keep keyboard focus on what it revealed
+      e.stopPropagation();
+      const opening=en.classList.contains('clamped');
+      if(opening)clampOpen.add(key);else clampOpen.delete(key);
+      set(!opening);layoutComments();
+      b.focus({preventScroll:true});   // Safari does not focus a clicked button; keep keyboard focus on the toggle everywhere
     };
     en.appendChild(b);
   });
@@ -968,17 +978,17 @@ function applyClamps(root){
 // just this card's thread in place; a full renderAll would drop .active and re-wrap every mark.
 // stopPropagation because card.onclick is focusPair, which scrolls the highlight to centre.
 function wireThread(card){
-  const f=card.querySelector('[data-act=unfold]');
+  const f=card.querySelector('[data-act=fold]');
   if(!f)return;
   f.onclick=e=>{
     e.stopPropagation();
-    const id=card.dataset.id;foldOpen.add(id);
+    const id=card.dataset.id;
+    if(foldOpen.has(id))foldOpen.delete(id);else foldOpen.add(id);
     const c=(comments||[]).find(x=>x.comment_id===id);if(!c)return;
     const tpl=document.createElement('template');tpl.innerHTML=threadHtml(c,isAddressed(c));
     card.querySelector('.gthread').replaceWith(tpl.content.firstElementChild);
     wireThread(card);applyClamps(card);layoutComments();
-    const first=card.querySelector('.gentry[data-idx="1"]');   // the button is gone; focus the first revealed entry
-    if(first){first.tabIndex=-1;first.focus({preventScroll:true});}
+    const nf=card.querySelector('[data-act=fold]');if(nf)nf.focus({preventScroll:true});   // the control was re-rendered; keep focus on it
   };
 }
 // wrap the comment's quoted text (within a single text node) in a highlight keyed by comment_id

@@ -130,29 +130,46 @@ try {
   await evalJs(`document.querySelector(${JSON.stringify(A)} + ' .gentry[data-idx="3"] .gmore').click(); true`);
   await sleep(150);
   k = await J(clampProbe(A));
-  ok('clamp A: Show more removes the clamp and the button; entry at full height',
-     k.e[3] && !k.e[3].clamped && k.e[3].more === null && k.e[3].client === k.e[3].scroll, JSON.stringify(k.e[3]));
+  ok('clamp A: Show more removes the clamp; entry at full height; control now reads Show less, aria-expanded=true',
+     k.e[3] && !k.e[3].clamped && k.e[3].more && k.e[3].more.text === 'Show less' && k.e[3].more.expanded === 'true' && k.e[3].client === k.e[3].scroll, JSON.stringify(k.e[3]));
+  let fm = await J(`JSON.stringify({cls:document.activeElement.className, idx:document.activeElement.closest('.gentry')?.dataset.idx})`);
+  ok('focus: after Show more, focus stays on the toggle', /gmore/.test(fm.cls) && fm.idx === '3', JSON.stringify(fm));
   await evalJs(`renderAll(); true`);
   await sleep(150);
   k = await J(clampProbe(A));
-  ok('clamp A: opened entry survives a full renderAll() (live-reload re-render)',
-     k.e[3] && !k.e[3].clamped && k.e[3].more === null, JSON.stringify(k.e[3]));
+  ok('clamp A: opened entry survives a full renderAll() (live-reload re-render), Show less still offered',
+     k.e[3] && !k.e[3].clamped && k.e[3].more && k.e[3].more.text === 'Show less', JSON.stringify(k.e[3]));
+  // Show less: re-clamps in place, survives re-render as clamped.
+  await evalJs(`document.querySelector(${JSON.stringify(A)} + ' .gentry[data-idx="3"] .gmore').click(); renderAll(); true`);
+  await sleep(150);
+  k = await J(clampProbe(A));
+  ok('clamp A: Show less re-clamps the entry, control reads Show more again, and that survives renderAll()',
+     k.e[3] && k.e[3].clamped && k.e[3].more && k.e[3].more.text === 'Show more' && k.e[3].more.expanded === 'false' && Math.abs(k.e[3].client - 8 * k.e[3].lh) < 1, JSON.stringify(k.e[3]));
+  await evalJs(`document.querySelector(${JSON.stringify(A)} + ' .gentry[data-idx="3"] .gmore').click(); true`);
+  await sleep(100);
 
   // Unfold: one click reveals every entry, no pagination, no re-fold control.
   await evalJs(`document.querySelector(${JSON.stringify(A)} + ' .gfold').focus(); document.activeElement.click(); true`);
   await sleep(150);
-  const f0 = await J(`JSON.stringify({idx:document.activeElement.closest('.gentry')?.dataset.idx, inA:!!document.activeElement.closest(${JSON.stringify(A)})})`);
-  ok('focus: after unfolding, focus is on the first revealed entry (idx1)', f0.inA && f0.idx === '1', JSON.stringify(f0));
+  const f0 = await J(`JSON.stringify({cls:document.activeElement.className, inA:!!document.activeElement.closest(${JSON.stringify(A)})})`);
+  ok('focus: after unfolding, focus stays on the fold toggle', f0.inA && /gfold/.test(f0.cls), JSON.stringify(f0));
   a = await J(cardProbe(A));
   ok('case A: one click on the fold reveals all 5 entries', a.present && a.n === 5 && a.idx.join() === '0,1,2,3,4', JSON.stringify(a));
-  ok('case A: no fold control remains after expanding (no re-fold)', a.present && a.fold === null, JSON.stringify(a));
+  ok('case A: the toggle stays, reading "Hide 2 earlier replies", aria-expanded=true', a.present && a.fold && a.fold.text.trim() === 'Hide 2 earlier replies' && a.fold.expanded === 'true', JSON.stringify(a));
 
   // Live reload: renderAll() is exactly what the 2s comments_updated poll calls. The expanded
   // state must survive it, keyed by comment id.
   await evalJs(`renderAll(); true`);
   await sleep(150);
   a = await J(cardProbe(A));
-  ok('case A: expanded state survives a full renderAll() (live-reload re-render)', a.present && a.n === 5 && a.fold === null, JSON.stringify(a));
+  ok('case A: expanded state survives a full renderAll() (live-reload re-render)', a.present && a.n === 5 && a.fold && a.fold.expanded === 'true', JSON.stringify(a));
+  // Re-fold: the toggle folds the thread again, and that survives a re-render too.
+  await evalJs(`document.querySelector(${JSON.stringify(A)} + ' .gfold').click(); renderAll(); true`);
+  await sleep(150);
+  a = await J(cardProbe(A));
+  ok('case A: clicking the toggle again re-folds (root + last two, "2 earlier replies"), surviving renderAll()', a.present && a.n === 3 && a.fold && a.fold.text.trim() === '2 earlier replies' && a.fold.expanded === 'false', JSON.stringify(a));
+  await evalJs(`document.querySelector(${JSON.stringify(A)} + ' .gfold').click(); true`);
+  await sleep(150);
   // The entry the fold had hidden (idx1, long) gets its clamp decided when it first lays out.
   k = await J(clampProbe(A));
   ok('clamp A: the long entry revealed by unfolding (idx1) is clamped on first layout', k.e[1] && k.e[1].clamped && k.e[1].more !== null, JSON.stringify(k.e[1]));
@@ -173,14 +190,14 @@ try {
   await evalJs(`document.querySelector(${JSON.stringify(D)} + ' .gfold').click(); true`);
   await sleep(150);
   d = await J(cardProbe(D));
-  ok('case D: fold opens inside the Resolved panel too', d.present && d.n === 5 && d.fold === null, JSON.stringify(d));
+  ok('case D: fold opens inside the Resolved panel too', d.present && d.n === 5 && d.fold && d.fold.expanded === 'true', JSON.stringify(d));
   // The panel is OPEN now. A live re-render (renderAll) rebuilds its cards; the long non-newest
   // entry (idx3) must come back clamped without toggling the panel, and the fold must stay open.
   await evalJs(`renderAll(); true`);
   await sleep(150);
   d = await J(cardProbe(D));
   const dk = await J(clampProbe(D));
-  ok('case D: fold stays open across renderAll() while the panel is open', d.present && d.n === 5 && d.fold === null, JSON.stringify(d));
+  ok('case D: fold stays open across renderAll() while the panel is open', d.present && d.n === 5 && d.fold && d.fold.expanded === 'true', JSON.stringify(d));
   ok('case D: long entry in the already-open Resolved panel is clamped after a live re-render', dk.e && dk.e[3] && dk.e[3].clamped && dk.e[3].more !== null && !dk.e[3].undecided, JSON.stringify(dk.e && dk.e[3]));
   ok('case D: no entry in the open panel is left undecided', dk.e && Object.values(dk.e).every(x => !x.undecided), JSON.stringify(dk.e));
 
@@ -189,8 +206,8 @@ try {
   // first revealed entry.
   await evalJs(`document.querySelector(${JSON.stringify(D)} + ' .gentry[data-idx="3"] .gmore').focus(); document.activeElement.click(); true`);
   await sleep(100);
-  const f1 = await J(`JSON.stringify({tag:document.activeElement.tagName, cls:document.activeElement.className, idx:document.activeElement.closest('.gentry')?.dataset.idx, inD:!!document.activeElement.closest(${JSON.stringify(D)})})`);
-  ok('focus: after Show more, focus is on the revealed text of that entry', f1.inD && f1.idx === '3' && /gtext/.test(f1.cls), JSON.stringify(f1));
+  const f1 = await J(`JSON.stringify({cls:document.activeElement.className, idx:document.activeElement.closest('.gentry')?.dataset.idx, inD:!!document.activeElement.closest(${JSON.stringify(D)})})`);
+  ok('focus: after Show more in the Resolved panel, focus stays on that entry\'s toggle', f1.inD && f1.idx === '3' && /gmore/.test(f1.cls), JSON.stringify(f1));
 
 } finally {
   try { ws?.close(); } catch {}
