@@ -211,6 +211,12 @@
   /* rev 3 thread entries: initials chip + label + relative time, hairline-separated (#279 AC6/7) */
   .gthread{display:flex;flex-direction:column;gap:8px;}
   .gentry+.gentry{border-top:1px solid var(--border-faint);padding-top:8px;}
+  /* #387: thread fold. Root entry, one control for the hidden middle, then the newest entries.
+     The button sits between two .gentry siblings, so it and the entry after it carry the hairline
+     the .gentry+.gentry rule above would otherwise draw. */
+  .gfold{align-self:flex-start;background:none;border:none;border-top:1px solid var(--border-faint);width:100%;text-align:left;padding:8px 0 0;cursor:pointer;font-family:var(--font-mono);font-size:11px;color:var(--accent);}
+  .gfold:hover{text-decoration:underline;}
+  .gfold+.gentry{border-top:1px solid var(--border-faint);padding-top:8px;}
   .gentry .gmeta{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
   .gentry .gav{width:22px;height:22px;flex:0 0 auto;border-radius:6px;background:var(--code-bg);color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:11px;font-weight:600;}
   .gentry.you .gav{background:var(--accent-muted);color:var(--accent);}
@@ -886,19 +892,53 @@ function isAddressed(c){
 // `.you` styling keys on isOwnEntry(e), NOT on the label text — #309 made the label a real name
 // for your own entries, so a text comparison against the literal string "You" would silently stop
 // highlighting them the moment you set one.
+// #387: a long thread folds its middle. The root entry states the issue and the newest FOLD_TAIL
+// entries are the working exchange; everything between goes behind one "N earlier replies"
+// control. FOLD_MIN_HIDDEN stops a fold from hiding a single entry (a button that reveals one
+// reply costs more than the reply), the same reasoning as MIN_GAP in static/linediff.js.
+// foldOpen is keyed by comment_id and lives for the page session, so the 2s comments_updated
+// re-render (renderAll) cannot snap an expanded thread shut while it is being read.
+const FOLD_TAIL=2, FOLD_MIN_HIDDEN=2;
+const foldOpen=new Set();
+function foldHidden(entries){const h=entries.length-1-FOLD_TAIL;return h>=FOLD_MIN_HIDDEN?h:0;}
 function threadHtml(c,addressed){
   const entries=c.thread||[];
-  return '<div class="gthread">'+(entries.map((e,i)=>{
+  const hidden=foldOpen.has(c.comment_id)?0:foldHidden(entries);
+  // data-idx is the entry's index in c.thread, not its position after folding, so anything keyed
+  // on it (the clamp state) stays put when the fold opens.
+  const entryHtml=(e,i)=>{
     const role=e.role==='agent'?'agent':'reviewer';
     const label=entryLabel(e);
     const showAddr=addressed&&role==='agent'&&i===entries.length-1;
-    return '<div class="gentry '+role+(isOwnEntry(e)?' you':'')+'">'
+    return '<div class="gentry '+role+(isOwnEntry(e)?' you':'')+'" data-idx="'+i+'">'
       +'<div class="gmeta"><span class="gav" aria-hidden="true">'+esc(initialsOf(e))+'</span>'
       +'<span class="gwho">'+esc(label)+'</span>'
       +(showAddr?'<span class="gaddr">Addressed</span>':'')
       +(e.ts?'<span class="gts">'+esc(ago(e.ts))+'</span>':'')+'</div>'
       +'<div class="gtext">'+mdComment(e.text||'')+'</div></div>';
-  }).join(''))+'</div>';
+  };
+  const parts=[];
+  if(hidden){
+    parts.push(entryHtml(entries[0],0));
+    parts.push('<button class="gfold" type="button" data-act="unfold" aria-expanded="false">'+hidden+' earlier replies</button>');
+    entries.slice(1+hidden).forEach((e,k)=>parts.push(entryHtml(e,1+hidden+k)));
+  }else entries.forEach((e,i)=>parts.push(entryHtml(e,i)));
+  return '<div class="gthread">'+parts.join('')+'</div>';
+}
+// #387: the fold control inside a card (gutter .gcard or Resolved .rcard). Opening it re-renders
+// just this card's thread in place; a full renderAll would drop .active and re-wrap every mark.
+// stopPropagation because card.onclick is focusPair, which scrolls the highlight to centre.
+function wireThread(card){
+  const f=card.querySelector('[data-act=unfold]');
+  if(!f)return;
+  f.onclick=e=>{
+    e.stopPropagation();
+    const id=card.dataset.id;foldOpen.add(id);
+    const c=(comments||[]).find(x=>x.comment_id===id);if(!c)return;
+    const tpl=document.createElement('template');tpl.innerHTML=threadHtml(c,isAddressed(c));
+    card.querySelector('.gthread').replaceWith(tpl.content.firstElementChild);
+    wireThread(card);layoutComments();
+  };
 }
 // wrap the comment's quoted text (within a single text node) in a highlight keyed by comment_id
 function highlightComment(c){
@@ -1014,7 +1054,9 @@ function renderAll(){
       clearTimeout(del._t);del._t=setTimeout(()=>{del.dataset.armed='';del.textContent='Delete';del.classList.remove('armed');if(confirming===cid)confirming=null;},3000);
     };
     card.onclick=()=>focusPair(card.dataset.id);
+    wireThread(card);
   });
+  RI.querySelectorAll('.rcard').forEach(wireThread);
   RI.querySelectorAll('.rcard [data-act=reopen]').forEach(b=>{
     b.onclick=e=>{e.stopPropagation();const ta=b.parentNode.querySelector('textarea');reopenComment(b.closest('.rcard').dataset.id,ta.value.trim());};
   });
