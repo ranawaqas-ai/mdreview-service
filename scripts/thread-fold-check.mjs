@@ -95,6 +95,49 @@ try {
      a.present && a.fold && /^2 earlier replies$/.test(a.fold.text.trim()) && a.fold.expanded === 'false' && a.fold.type === 'button', JSON.stringify(a));
   ok('case A: Addressed badge sits on the visible newest entry while folded', a.present && a.badgeOnLast && a.badgeCount === 1, JSON.stringify(a));
 
+  // Clamp, while folded: idx3 (long, not newest) is clamped to CLAMP_LINES with a real button;
+  // idx4 (long, newest) is never clamped. Sampled as rendered heights, not class names alone.
+  const clampProbe = (sel) => `(()=>{
+    const card=document.querySelector(${JSON.stringify(sel)});
+    if(!card) return JSON.stringify({present:false});
+    const r={present:true,e:{}};
+    card.querySelectorAll('.gentry').forEach(en=>{
+      const t=en.querySelector('.gtext'),m=en.querySelector('.gmore');
+      r.e[en.dataset.idx]={clamped:en.classList.contains('clamped'),undecided:en.classList.contains('clampable'),
+        more:m?{text:m.textContent.trim(),expanded:m.getAttribute('aria-expanded'),type:m.getAttribute('type')}:null,
+        client:t.clientHeight,scroll:t.scrollHeight,lh:parseFloat(getComputedStyle(t).lineHeight)};
+    });
+    return JSON.stringify(r);
+  })()`;
+  let k = await J(clampProbe(A));
+  const e3 = k.e && k.e[3], e4 = k.e && k.e[4];
+  ok('clamp A: long non-newest entry (idx3) is clamped, with a Show more button, aria-expanded=false',
+     e3 && e3.clamped && e3.more && e3.more.text === 'Show more' && e3.more.expanded === 'false' && e3.more.type === 'button', JSON.stringify(e3));
+  ok('clamp A: idx3 rendered height is the CLAMP_LINES cap and its content overflows it',
+     e3 && Math.abs(e3.client - 8 * e3.lh) < 1 && e3.scroll > e3.client, JSON.stringify(e3));
+  ok('clamp A: the newest entry (idx4) is long but never clamped, no button, full height',
+     e4 && !e4.clamped && !e4.undecided && e4.more === null && e4.client === e4.scroll, JSON.stringify(e4));
+  ok('clamp A: every visible entry has been decided (no .clampable left in a laid-out card)',
+     k.present && Object.values(k.e).every(x => !x.undecided), JSON.stringify(k.e));
+
+  // Hysteresis is a pure predicate (a browser fixture exactly one line over the cap is flaky):
+  // one extra line over the cap shows in full, two-plus clamps.
+  const hy = await J(`JSON.stringify({one:needsClamp(9*19.5,19.5), two:needsClamp(10*19.5,19.5), twoPlus:needsClamp(10*19.5+1,19.5), cap:needsClamp(8*19.5,19.5)})`);
+  ok('clamp predicate: at the cap or one line over -> shown in full', hy.cap === false && hy.one === false, JSON.stringify(hy));
+  ok('clamp predicate: exactly two lines over is still full; beyond two lines clamps', hy.two === false && hy.twoPlus === true, JSON.stringify(hy));
+
+  // Show more: opens in place, and stays open across the live-reload re-render.
+  await evalJs(`document.querySelector(${JSON.stringify(A)} + ' .gentry[data-idx="3"] .gmore').click(); true`);
+  await sleep(150);
+  k = await J(clampProbe(A));
+  ok('clamp A: Show more removes the clamp and the button; entry at full height',
+     k.e[3] && !k.e[3].clamped && k.e[3].more === null && k.e[3].client === k.e[3].scroll, JSON.stringify(k.e[3]));
+  await evalJs(`renderAll(); true`);
+  await sleep(150);
+  k = await J(clampProbe(A));
+  ok('clamp A: opened entry survives a full renderAll() (live-reload re-render)',
+     k.e[3] && !k.e[3].clamped && k.e[3].more === null, JSON.stringify(k.e[3]));
+
   // Unfold: one click reveals every entry, no pagination, no re-fold control.
   await evalJs(`document.querySelector(${JSON.stringify(A)} + ' .gfold').click(); true`);
   await sleep(150);
@@ -108,6 +151,10 @@ try {
   await sleep(150);
   a = await J(cardProbe(A));
   ok('case A: expanded state survives a full renderAll() (live-reload re-render)', a.present && a.n === 5 && a.fold === null, JSON.stringify(a));
+  // The entry the fold had hidden (idx1, long) gets its clamp decided when it first lays out.
+  k = await J(clampProbe(A));
+  ok('clamp A: the long entry revealed by unfolding (idx1) is clamped on first layout', k.e[1] && k.e[1].clamped && k.e[1].more !== null, JSON.stringify(k.e[1]));
+  ok('clamp A: the entry opened earlier (idx3) is still open after unfold + re-render', k.e[3] && !k.e[3].clamped, JSON.stringify(k.e[3]));
 
   // Case B: 4 entries. Root + last two would hide exactly ONE entry; never fold one.
   const b = await J(cardProbe(B));

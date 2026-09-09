@@ -217,6 +217,14 @@
   .gfold{align-self:flex-start;background:none;border:none;border-top:1px solid var(--border-faint);width:100%;text-align:left;padding:8px 0 0;cursor:pointer;font-family:var(--font-mono);font-size:11px;color:var(--accent);}
   .gfold:hover{text-decoration:underline;}
   .gfold+.gentry{border-top:1px solid var(--border-faint);padding-top:8px;}
+  /* #387: per-entry clamp. max-height is set inline by applyClamps() from the computed line
+     height. --gclamp-bg is the fade's end colour and must match the card ground: .gcard sits on
+     --surface, .rcard on the Resolved panel's --surface-raised. */
+  .gentry.clamped .gtext{overflow:hidden;position:relative;}
+  .gentry.clamped .gtext::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2.4em;background:linear-gradient(to bottom,transparent,var(--gclamp-bg,var(--surface)));pointer-events:none;}
+  .rcard{--gclamp-bg:var(--surface-raised);}
+  .gmore{display:block;background:none;border:none;padding:4px 0 0;cursor:pointer;font-family:var(--font-mono);font-size:11px;color:var(--accent);}
+  .gmore:hover{text-decoration:underline;}
   .gentry .gmeta{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
   .gentry .gav{width:22px;height:22px;flex:0 0 auto;border-radius:6px;background:var(--code-bg);color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:11px;font-weight:600;}
   .gentry.you .gav{background:var(--accent-muted);color:var(--accent);}
@@ -910,7 +918,8 @@ function threadHtml(c,addressed){
     const role=e.role==='agent'?'agent':'reviewer';
     const label=entryLabel(e);
     const showAddr=addressed&&role==='agent'&&i===entries.length-1;
-    return '<div class="gentry '+role+(isOwnEntry(e)?' you':'')+'" data-idx="'+i+'">'
+    const clampable=i<entries.length-1;   // the newest entry is the one being acted on: never clamped
+    return '<div class="gentry '+role+(isOwnEntry(e)?' you':'')+(clampable?' clampable':'')+'" data-idx="'+i+'">'
       +'<div class="gmeta"><span class="gav" aria-hidden="true">'+esc(initialsOf(e))+'</span>'
       +'<span class="gwho">'+esc(label)+'</span>'
       +(showAddr?'<span class="gaddr">Addressed</span>':'')
@@ -925,6 +934,33 @@ function threadHtml(c,addressed){
   }else entries.forEach((e,i)=>parts.push(entryHtml(e,i)));
   return '<div class="gthread">'+parts.join('')+'</div>';
 }
+// #387: per-entry clamp. Entries other than the newest are cut by rendered height, never by
+// character count, so a markdown list or code block is not split mid-item, behind a "Show more"
+// button. CLAMP_LINES is the visible cap; an entry that overflows it by fewer than
+// CLAMP_SLACK_LINES shows in full, because a button that reveals one more line costs more than
+// the line (MIN_GAP reasoning again). The decision needs layout, so applyClamps() runs from
+// layoutComments() and the dock toggles once the container is display:block, and only decides
+// entries not yet decided. clampOpen is keyed by comment_id:idx for the page session, so the
+// live-reload re-render cannot re-clamp an entry someone has opened.
+const CLAMP_LINES=8, CLAMP_SLACK_LINES=2;
+const clampOpen=new Set();
+function needsClamp(scrollH,lineH){return scrollH>(CLAMP_LINES+CLAMP_SLACK_LINES)*lineH;}
+function applyClamps(root){
+  root.querySelectorAll('.gentry.clampable').forEach(en=>{
+    const text=en.querySelector('.gtext');
+    if(!text||text.offsetParent===null)return;      // not laid out yet (hidden panel): decide when shown
+    en.classList.remove('clampable');
+    const card=en.closest('[data-id]');const key=(card?card.dataset.id:'')+':'+en.dataset.idx;
+    if(clampOpen.has(key))return;
+    const lh=parseFloat(getComputedStyle(text).lineHeight)||19.5;
+    if(!needsClamp(text.scrollHeight,lh))return;
+    en.classList.add('clamped');text.style.maxHeight=(CLAMP_LINES*lh)+'px';
+    const b=document.createElement('button');b.type='button';b.className='gmore';b.dataset.act='more';
+    b.setAttribute('aria-expanded','false');b.textContent='Show more';
+    b.onclick=e=>{e.stopPropagation();clampOpen.add(key);en.classList.remove('clamped');text.style.maxHeight='';b.remove();layoutComments();};
+    en.appendChild(b);
+  });
+}
 // #387: the fold control inside a card (gutter .gcard or Resolved .rcard). Opening it re-renders
 // just this card's thread in place; a full renderAll would drop .active and re-wrap every mark.
 // stopPropagation because card.onclick is focusPair, which scrolls the highlight to centre.
@@ -937,7 +973,7 @@ function wireThread(card){
     const c=(comments||[]).find(x=>x.comment_id===id);if(!c)return;
     const tpl=document.createElement('template');tpl.innerHTML=threadHtml(c,isAddressed(c));
     card.querySelector('.gthread').replaceWith(tpl.content.firstElementChild);
-    wireThread(card);layoutComments();
+    wireThread(card);applyClamps(card);layoutComments();
   };
 }
 // wrap the comment's quoted text (within a single text node) in a highlight keyed by comment_id
@@ -1078,6 +1114,7 @@ function layoutComments(){
   if(wide){
     G.classList.remove('docked');G.style.display='block';G.style.top='0px';G.style.width='284px';
     G.style.left=(rect.left+window.scrollX+rect.width+24)+'px';
+    applyClamps(G);   // #387: heights must be final before the cards are stacked below
     // rail header pins to the article's top edge; cards stack strictly below it
     const hdr=G.querySelector('.ghdr');
     let prev=0;
@@ -1091,6 +1128,7 @@ function layoutComments(){
     G.querySelectorAll('.gcard').forEach(c=>c.style.top='');
     const hdr=G.querySelector('.ghdr');if(hdr)hdr.style.top='';
     if(!G.classList.contains('docked'))G.style.display='none';   // narrow: hidden unless toggled docked
+    else applyClamps(G);
   }
 }
 // Issue #44: place the composer BESIDE the anchored block (where comment cards live), never over it.
@@ -1169,11 +1207,12 @@ $("#cmtbtn").onclick=()=>{
   $("#resolved").style.display='none';
   g.classList.toggle('docked',show);
   g.style.display=show?'block':(document.body.classList.contains('gutter-on')?'block':'none');
+  if(show)applyClamps(g);
 };
 $("#resbtn").onclick=()=>{
   const r=$("#resolved");const show=r.style.display!=='block';
   r.style.display=show?'block':'none';
-  if(show){const g=$("#gutter");g.classList.remove('docked');if(!document.body.classList.contains('gutter-on'))g.style.display='none';}
+  if(show){const g=$("#gutter");g.classList.remove('docked');if(!document.body.classList.contains('gutter-on'))g.style.display='none';applyClamps(r);}
 };
 
 // live-reload: a source change re-renders the doc; a comment change re-renders the threads (so an
