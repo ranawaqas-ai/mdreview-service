@@ -957,7 +957,10 @@ function applyClamps(root){
     en.classList.add('clamped');text.style.maxHeight=(CLAMP_LINES*lh)+'px';
     const b=document.createElement('button');b.type='button';b.className='gmore';b.dataset.act='more';
     b.setAttribute('aria-expanded','false');b.textContent='Show more';
-    b.onclick=e=>{e.stopPropagation();clampOpen.add(key);en.classList.remove('clamped');text.style.maxHeight='';b.remove();layoutComments();};
+    b.onclick=e=>{
+      e.stopPropagation();clampOpen.add(key);en.classList.remove('clamped');text.style.maxHeight='';b.remove();layoutComments();
+      text.tabIndex=-1;text.focus({preventScroll:true});   // the button is gone; keep keyboard focus on what it revealed
+    };
     en.appendChild(b);
   });
 }
@@ -974,6 +977,8 @@ function wireThread(card){
     const tpl=document.createElement('template');tpl.innerHTML=threadHtml(c,isAddressed(c));
     card.querySelector('.gthread').replaceWith(tpl.content.firstElementChild);
     wireThread(card);applyClamps(card);layoutComments();
+    const first=card.querySelector('.gentry[data-idx="1"]');   // the button is gone; focus the first revealed entry
+    if(first){first.tabIndex=-1;first.focus({preventScroll:true});}
   };
 }
 // wrap the comment's quoted text (within a single text node) in a highlight keyed by comment_id
@@ -1114,7 +1119,7 @@ function layoutComments(){
   if(wide){
     G.classList.remove('docked');G.style.display='block';G.style.top='0px';G.style.width='284px';
     G.style.left=(rect.left+window.scrollX+rect.width+24)+'px';
-    applyClamps(G);   // #387: heights must be final before the cards are stacked below
+    applyClamps(document);   // #387: heights must be final before the cards are stacked below; document, not G, so a Resolved panel already open during a live re-render is decided too
     // rail header pins to the article's top edge; cards stack strictly below it
     const hdr=G.querySelector('.ghdr');
     let prev=0;
@@ -1128,7 +1133,7 @@ function layoutComments(){
     G.querySelectorAll('.gcard').forEach(c=>c.style.top='');
     const hdr=G.querySelector('.ghdr');if(hdr)hdr.style.top='';
     if(!G.classList.contains('docked'))G.style.display='none';   // narrow: hidden unless toggled docked
-    else applyClamps(G);
+    applyClamps(document);   // #387: idempotent, skips whatever is not laid out
   }
 }
 // Issue #44: place the composer BESIDE the anchored block (where comment cards live), never over it.

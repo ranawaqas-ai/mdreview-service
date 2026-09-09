@@ -76,7 +76,7 @@ b = make(2, [("reviewer", "Root."), ("agent", SHORT), ("reviewer", SHORT), ("age
 c = make(3, [("reviewer", "Root."), ("agent", SHORT), ("reviewer", SHORT)])
 # D: resolved thread -> same fold inside the Resolved panel's .rcard. Four entries plus the
 # resolve justification, which the API appends as a fifth (agent) entry.
-d = make(4, [("reviewer", "Root."), ("agent", SHORT), ("reviewer", SHORT), ("agent", SHORT)])
+d = make(4, [("reviewer", "Root."), ("agent", SHORT), ("reviewer", SHORT), ("agent", LONG)])
 call("/api/reviews/%s/comments/%s/resolve" % (rid, d), {"justification": "Done."})
 
 print(json.dumps({"rid": rid, "a": a, "b": b, "c": c, "d": d}))
