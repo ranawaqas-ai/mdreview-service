@@ -60,6 +60,19 @@ ENABLE_LATEX = os.environ.get("MDREVIEW_ENABLE_LATEX", "").lower() in ("1", "tru
 LATEX_TEMPLATE_DOWNLOAD = os.environ.get("MDREVIEW_LATEX_TEMPLATE_DOWNLOAD", "1").lower() in ("1", "true", "yes")
 LATEX_TEMPLATE_REGISTRY = os.environ.get("MDREVIEW_LATEX_TEMPLATE_REGISTRY", "")
 
+# ENABLE_GIT_HISTORY wires src/git_history (#379: a clonable git remote per review, materialized
+# lazily from history/round-N/ on first clone request; never touches the write path). Same
+# byte-identical-when-off contract as ENABLE_LATEX above.
+ENABLE_GIT_HISTORY = os.environ.get("MDREVIEW_ENABLE_GIT_HISTORY", "").lower() in ("1", "true", "yes")
+# Per-review bare-repo cache; fully derived from history/round-N/ + the live draft, so it is safe to
+# delete at any time (a cold/evicted entry just gets rebuilt on the next clone request).
+GIT_CACHE_DIR = os.environ.get("MDREVIEW_GIT_CACHE_DIR", "") or os.path.join(DATA_DIR, ".git-cache")
+# Bounds the COLD materialize walk (a review with more historical rounds than this gets a shallow
+# git history — only the most recent N rounds are ever committed — instead of a full round-0-to-now
+# walk on one request). Once a repo has started building, new rounds append one at a time as they
+# arrive; the cap only ever gates the initial cold build (see gitcache.py).
+GIT_MATERIALIZE_MAX_ROUNDS = int(os.environ.get("MDREVIEW_GIT_MATERIALIZE_MAX_ROUNDS", "200"))
+
 # DoS backstops (the fine-grained caps live in nginx; these guard the app even on the loopback path).
 # MAX_BODY is a generous ceiling above the asset-upload cap; nginx enforces the tight per-route size.
 MAX_BODY = int(os.environ.get("MDREVIEW_MAX_BODY", str(32 * 1024 * 1024)))

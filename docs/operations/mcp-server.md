@@ -33,6 +33,26 @@ this exact block with the token already filled in, so you only correct the local
 
 Use an **absolute interpreter path**, not a bare `python3`: `python3` resolves to whatever is first on the client's PATH (often an old system Python), and a stale or misconfigured system HTTP proxy that such an interpreter honors can make every backend call fail with a bogus "connection refused". Point `args` at the file **inside your checkout** so a `git pull` keeps the wrapper current with no rebuild or re-publish; a change to the wrapper's own code still needs one client reconnect to load (a stdio server reads its code once at startup).
 
+## Developing mdreview-service itself
+
+The "point `args` at your checkout" advice above is for *using* the service, where you aren't
+editing `src/`. If you're developing mdreview-service, don't wire your daily-driver `mdreview` /
+`mdreview-hosted` / `mdreview-staging` aliases at the checkout: a mid-edit or syntax-broken
+`src/mcp/*.py` becomes what those aliases run on their next reconnect, everywhere, not just in the
+session doing the edit. Install a separate, non-checkout copy for daily use
+(`curl -fsSL https://mdreview.space/install.sh | MDREVIEW_MODE=local sh`, which lands in
+`~/.mdreview/mdreview-service` and self-updates independently of your working tree — see
+[install.sh](https://mdreview.space/install.sh) and `src/mcp/update.py`), and register a separate
+alias for the checkout you're actively changing:
+
+```bash
+make dev   # background instance on localhost:8138, data in .scratch/dev-data (gitignored)
+claude mcp add mdreview-dev -e MDREVIEW_BASE=http://localhost:8138 -- python3 src/mcp_server.py
+```
+
+`mdreview-dev` is safe to break; the daily-driver aliases, wired to the installed copy, aren't
+touched by anything you do in the checkout.
+
 **Tools (20):** `create_review` (markdown, title?, project?, session?,
 source_path?), `list_reviews`, `get_review` (id), `get_source` (id), `get_feedback` (id), `get_status` (id),
 `update_source` (id, markdown), `get_history` (id, round?), `attach_asset` (id, name, path|content_b64),

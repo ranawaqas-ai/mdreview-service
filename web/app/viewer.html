@@ -211,6 +211,20 @@
   /* rev 3 thread entries: initials chip + label + relative time, hairline-separated (#279 AC6/7) */
   .gthread{display:flex;flex-direction:column;gap:8px;}
   .gentry+.gentry{border-top:1px solid var(--border-faint);padding-top:8px;}
+  /* #387: thread fold. Root entry, one control for the hidden middle, then the newest entries.
+     The button sits between two .gentry siblings, so it and the entry after it carry the hairline
+     the .gentry+.gentry rule above would otherwise draw. */
+  .gfold{align-self:flex-start;background:none;border:none;border-top:1px solid var(--border-faint);width:100%;text-align:left;padding:8px 0 0;cursor:pointer;font-family:var(--font-mono);font-size:11px;color:var(--accent);}
+  .gfold:hover{text-decoration:underline;}
+  .gfold+.gentry{border-top:1px solid var(--border-faint);padding-top:8px;}
+  /* #387: per-entry clamp. max-height is set inline by applyClamps() from the computed line
+     height. --gclamp-bg is the fade's end colour and must match the card ground: .gcard sits on
+     --surface, .rcard on the Resolved panel's --surface-raised. */
+  .gentry.clamped .gtext{overflow:hidden;position:relative;}
+  .gentry.clamped .gtext::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2.4em;background:linear-gradient(to bottom,transparent,var(--gclamp-bg,var(--surface)));pointer-events:none;}
+  .rcard{--gclamp-bg:var(--surface-raised);}
+  .gmore{display:block;background:none;border:none;padding:4px 0 0;cursor:pointer;font-family:var(--font-mono);font-size:11px;color:var(--accent);}
+  .gmore:hover{text-decoration:underline;}
   .gentry .gmeta{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
   .gentry .gav{width:22px;height:22px;flex:0 0 auto;border-radius:6px;background:var(--code-bg);color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:11px;font-weight:600;}
   .gentry.you .gav{background:var(--accent-muted);color:var(--accent);}
@@ -354,7 +368,7 @@
 <body>
 <header class="topbar">
   <div class="tb-left"><a href="/" class="home" title="Back to all reviews">&larr; Reviews</a><span class="tb-sep">|</span><span class="kindchip" aria-hidden="true">MD</span><span class="filename" id="filename">loading…</span></div>
-  <div class="tb-right" style="display:flex;align-items:center;gap:14px"><button id="editbtn" class="tb-btn" type="button" style="display:none">Edit</button><button id="difftoggle" class="tb-btn difftoggle" type="button" aria-pressed="false" title="Show what changed in the last revision" hidden><span class="dglyph" aria-hidden="true">+/−</span><span>Diff</span><span class="dcount" id="diffcount" hidden></span></button><div class="share-wrap"><button id="sharebtn" class="tb-btn" type="button" style="display:none">Share</button><div id="sharepop" class="sharepop" hidden></div></div><!-- #285's theme toggle mounts HERE (between Share and #acct): account.js inserts it as #acct's previous sibling --><div id="acct"></div></div>
+  <div class="tb-right" style="display:flex;align-items:center;gap:14px"><button id="editbtn" class="tb-btn" type="button" style="display:none">Edit</button><button id="difftoggle" class="tb-btn difftoggle" type="button" aria-pressed="false" title="Show what changed in the last revision" hidden><span class="dglyph" aria-hidden="true">+/−</span><span>Diff</span><span class="dcount" id="diffcount" hidden></span></button><div class="share-wrap"><button id="sharebtn" class="tb-btn" type="button" style="display:none">Share</button><div id="sharepop" class="sharepop" hidden></div></div><div class="share-wrap"><button id="gitbtn" class="tb-btn" type="button" style="display:none">Git</button><div id="gitpop" class="sharepop" hidden></div></div><!-- #285's theme toggle mounts HERE (between Share and #acct): account.js inserts it as #acct's previous sibling --><div id="acct"></div></div>
 </header>
 <div class="wrap">
   <nav class="breadcrumb" id="breadcrumb"></nav>
@@ -886,19 +900,96 @@ function isAddressed(c){
 // `.you` styling keys on isOwnEntry(e), NOT on the label text — #309 made the label a real name
 // for your own entries, so a text comparison against the literal string "You" would silently stop
 // highlighting them the moment you set one.
+// #387: a long thread folds its middle. The root entry states the issue and the newest FOLD_TAIL
+// entries are the working exchange; everything between goes behind one "N earlier replies"
+// control. FOLD_MIN_HIDDEN stops a fold from hiding a single entry (a button that reveals one
+// reply costs more than the reply), the same reasoning as MIN_GAP in static/linediff.js.
+// foldOpen is keyed by comment_id and lives for the page session, so the 2s comments_updated
+// re-render (renderAll) cannot snap an expanded thread shut while it is being read.
+const FOLD_TAIL=2, FOLD_MIN_HIDDEN=2;
+const foldOpen=new Set();
+function foldHidden(entries){const h=entries.length-1-FOLD_TAIL;return h>=FOLD_MIN_HIDDEN?h:0;}
 function threadHtml(c,addressed){
   const entries=c.thread||[];
-  return '<div class="gthread">'+(entries.map((e,i)=>{
+  const foldable=foldHidden(entries), open=foldOpen.has(c.comment_id);
+  const hidden=open?0:foldable;
+  // data-idx is the entry's index in c.thread, not its position after folding, so anything keyed
+  // on it (the clamp state) stays put when the fold opens.
+  const entryHtml=(e,i)=>{
     const role=e.role==='agent'?'agent':'reviewer';
     const label=entryLabel(e);
     const showAddr=addressed&&role==='agent'&&i===entries.length-1;
-    return '<div class="gentry '+role+(isOwnEntry(e)?' you':'')+'">'
+    const clampable=i<entries.length-1;   // the newest entry is the one being acted on: never clamped
+    return '<div class="gentry '+role+(isOwnEntry(e)?' you':'')+(clampable?' clampable':'')+'" data-idx="'+i+'">'
       +'<div class="gmeta"><span class="gav" aria-hidden="true">'+esc(initialsOf(e))+'</span>'
       +'<span class="gwho">'+esc(label)+'</span>'
       +(showAddr?'<span class="gaddr">Addressed</span>':'')
       +(e.ts?'<span class="gts">'+esc(ago(e.ts))+'</span>':'')+'</div>'
       +'<div class="gtext">'+mdComment(e.text||'')+'</div></div>';
-  }).join(''))+'</div>';
+  };
+  // One toggle in both states (a disclosure control: it stays put and flips aria-expanded), so
+  // an expanded thread can be folded again without a reload. It sits after the root entry.
+  const toggle=foldable?'<button class="gfold" type="button" data-act="fold" aria-expanded="'+(open?'true':'false')+'">'
+    +(open?'Hide '+foldable+' earlier replies':foldable+' earlier replies')+'</button>':'';
+  const parts=[entryHtml(entries[0],0)];
+  if(entries.length>1){
+    parts.push(toggle);
+    entries.slice(1+hidden).forEach((e,k)=>parts.push(entryHtml(e,1+hidden+k)));
+  }
+  return '<div class="gthread">'+(entries.length?parts.join(''):'')+'</div>';
+}
+// #387: per-entry clamp. Entries other than the newest are cut by rendered height, never by
+// character count, so a markdown list or code block is not split mid-item, behind a "Show more"
+// button. CLAMP_LINES is the visible cap; an entry that overflows it by fewer than
+// CLAMP_SLACK_LINES shows in full, because a button that reveals one more line costs more than
+// the line (MIN_GAP reasoning again). The decision needs layout, so applyClamps() runs from
+// layoutComments() and the dock toggles once the container is display:block, and only decides
+// entries not yet decided. clampOpen is keyed by comment_id:idx for the page session, so the
+// live-reload re-render cannot re-clamp an entry someone has opened.
+const CLAMP_LINES=8, CLAMP_SLACK_LINES=2;
+const clampOpen=new Set();
+function needsClamp(scrollH,lineH){return scrollH>(CLAMP_LINES+CLAMP_SLACK_LINES)*lineH;}
+function applyClamps(root){
+  root.querySelectorAll('.gentry.clampable').forEach(en=>{
+    const text=en.querySelector('.gtext');
+    if(!text||text.offsetParent===null)return;      // not laid out yet (hidden panel): decide when shown
+    en.classList.remove('clampable');
+    const card=en.closest('[data-id]');const key=(card?card.dataset.id:'')+':'+en.dataset.idx;
+    const lh=parseFloat(getComputedStyle(text).lineHeight)||19.5;
+    if(!needsClamp(text.scrollHeight,lh))return;
+    // One toggle in both states (Show more / Show less); it stays put, so keyboard focus stays on it.
+    const b=document.createElement('button');b.type='button';b.className='gmore';b.dataset.act='more';
+    const set=on=>{
+      en.classList.toggle('clamped',on);text.style.maxHeight=on?(CLAMP_LINES*lh)+'px':'';
+      b.setAttribute('aria-expanded',on?'false':'true');b.textContent=on?'Show more':'Show less';
+    };
+    set(!clampOpen.has(key));
+    b.onclick=e=>{
+      e.stopPropagation();
+      const opening=en.classList.contains('clamped');
+      if(opening)clampOpen.add(key);else clampOpen.delete(key);
+      set(!opening);layoutComments();
+      b.focus({preventScroll:true});   // Safari does not focus a clicked button; keep keyboard focus on the toggle everywhere
+    };
+    en.appendChild(b);
+  });
+}
+// #387: the fold control inside a card (gutter .gcard or Resolved .rcard). Opening it re-renders
+// just this card's thread in place; a full renderAll would drop .active and re-wrap every mark.
+// stopPropagation because card.onclick is focusPair, which scrolls the highlight to centre.
+function wireThread(card){
+  const f=card.querySelector('[data-act=fold]');
+  if(!f)return;
+  f.onclick=e=>{
+    e.stopPropagation();
+    const id=card.dataset.id;
+    if(foldOpen.has(id))foldOpen.delete(id);else foldOpen.add(id);
+    const c=(comments||[]).find(x=>x.comment_id===id);if(!c)return;
+    const tpl=document.createElement('template');tpl.innerHTML=threadHtml(c,isAddressed(c));
+    card.querySelector('.gthread').replaceWith(tpl.content.firstElementChild);
+    wireThread(card);applyClamps(card);layoutComments();
+    const nf=card.querySelector('[data-act=fold]');if(nf)nf.focus({preventScroll:true});   // the control was re-rendered; keep focus on it
+  };
 }
 // wrap the comment's quoted text (within a single text node) in a highlight keyed by comment_id
 function highlightComment(c){
@@ -1014,7 +1105,9 @@ function renderAll(){
       clearTimeout(del._t);del._t=setTimeout(()=>{del.dataset.armed='';del.textContent='Delete';del.classList.remove('armed');if(confirming===cid)confirming=null;},3000);
     };
     card.onclick=()=>focusPair(card.dataset.id);
+    wireThread(card);
   });
+  RI.querySelectorAll('.rcard').forEach(wireThread);
   RI.querySelectorAll('.rcard [data-act=reopen]').forEach(b=>{
     b.onclick=e=>{e.stopPropagation();const ta=b.parentNode.querySelector('textarea');reopenComment(b.closest('.rcard').dataset.id,ta.value.trim());};
   });
@@ -1036,6 +1129,7 @@ function layoutComments(){
   if(wide){
     G.classList.remove('docked');G.style.display='block';G.style.top='0px';G.style.width='284px';
     G.style.left=(rect.left+window.scrollX+rect.width+24)+'px';
+    applyClamps(document);   // #387: heights must be final before the cards are stacked below; document, not G, so a Resolved panel already open during a live re-render is decided too
     // rail header pins to the article's top edge; cards stack strictly below it
     const hdr=G.querySelector('.ghdr');
     let prev=0;
@@ -1049,6 +1143,7 @@ function layoutComments(){
     G.querySelectorAll('.gcard').forEach(c=>c.style.top='');
     const hdr=G.querySelector('.ghdr');if(hdr)hdr.style.top='';
     if(!G.classList.contains('docked'))G.style.display='none';   // narrow: hidden unless toggled docked
+    applyClamps(document);   // #387: idempotent, skips whatever is not laid out
   }
 }
 // Issue #44: place the composer BESIDE the anchored block (where comment cards live), never over it.
@@ -1127,11 +1222,12 @@ $("#cmtbtn").onclick=()=>{
   $("#resolved").style.display='none';
   g.classList.toggle('docked',show);
   g.style.display=show?'block':(document.body.classList.contains('gutter-on')?'block':'none');
+  if(show)applyClamps(g);
 };
 $("#resbtn").onclick=()=>{
   const r=$("#resolved");const show=r.style.display!=='block';
   r.style.display=show?'block':'none';
-  if(show){const g=$("#gutter");g.classList.remove('docked');if(!document.body.classList.contains('gutter-on'))g.style.display='none';}
+  if(show){const g=$("#gutter");g.classList.remove('docked');if(!document.body.classList.contains('gutter-on'))g.style.display='none';applyClamps(r);}
 };
 
 // live-reload: a source change re-renders the doc; a comment change re-renders the threads (so an
@@ -1454,6 +1550,7 @@ mdKeys.pushEscape(()=>{const l=$("#lightbox");if(!l||l.style.display!=='flex')re
 mdKeys.pushEscape(()=>{const h=$("#histmodal");if(!h||h.style.display!=='flex')return false;h.style.display='none';return true;});
 mdKeys.pushEscape(()=>{const p=$("#pop");if(!p||p.style.display!=='block')return false;p.style.display='none';return true;});
 mdKeys.pushEscape(()=>{const s=$("#sharepop");if(!s||s.hidden)return false;s.hidden=true;return true;});
+mdKeys.pushEscape(()=>{const g=$("#gitpop");if(!g||g.hidden)return false;g.hidden=true;return true;});
 
 mdKeys.register([
   {keys:"c", label:"Toggle the comments panel",  run:()=>mdKeys.click("#cmtbtn")},
@@ -1582,6 +1679,37 @@ function renderShare(){
   }));
 }
 initShare();
+
+// ---- Git control: clone URL for git-tracked history (#379) — same shape as Share, above.
+// Absent entirely (button never shown) when the backend has the feature off, or on a 404/error;
+// #git_url is additive, so this never assumes the route exists.
+async function initGit(){
+  const btn = document.getElementById("gitbtn"), pop = document.getElementById("gitpop");
+  if(!btn) return;
+  let r; try{ r = await fetch(API + "/git_url", {cache:"no-store"}); }catch(e){ return; }
+  if(r.status !== 200) return;
+  const d = await r.json().catch(()=>({}));
+  if(!d.git_url) return;
+  btn.style.display = "";
+  btn.addEventListener("click", e=>{ e.stopPropagation(); pop.hidden = !pop.hidden; if(!pop.hidden) renderGit(d.git_url); });
+  document.addEventListener("click", e=>{ if(!pop.hidden && !pop.contains(e.target) && e.target!==btn) pop.hidden = true; });
+}
+async function copyPlain(text, focusSel){
+  try{ await navigator.clipboard.writeText(text); return true; }
+  catch(e){ try{ const i=document.querySelector(focusSel); if(i){i.focus();i.select();} return document.execCommand("copy"); }catch(e2){ return false; } }
+}
+function renderGit(url){
+  const pop = document.getElementById("gitpop");
+  pop.innerHTML =
+    '<h3>Clone this review</h3>' +
+    '<div class="share-row"><div class="share-lbl">Full revision history<small>Every round, as real git commits</small></div></div>' +
+    '<div class="share-link"><input id="giturl" readonly value="' + _esc(url) + '"><button class="share-copy" id="gitcopy" type="button">Copy</button></div>';
+  pop.querySelector("#gitcopy").addEventListener("click", async ()=>{
+    const cp = pop.querySelector("#gitcopy");
+    if(await copyPlain(url, "#gitpop #giturl")){ cp.textContent = "Copied"; cp.classList.add("ok"); setTimeout(()=>{ if(cp.isConnected){ cp.textContent = "Copy"; cp.classList.remove("ok"); } }, 2000); }
+  });
+}
+initGit();
 </script>
 <script src="/static/session.js"></script>
 <script src="/static/account.js"></script>

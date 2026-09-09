@@ -102,6 +102,8 @@ def route(name, args):
         if args.get("round") is not None:
             return "GET", "/api/reviews/%s/history/%s" % (args["id"], args["round"]), None
         return "GET", "/api/reviews/%s/history" % args["id"], None
+    if name == "get_git_url":
+        return "GET", "/api/reviews/%s/git_url" % args["id"], None
     if name == "delete_review":
         return "DELETE", "/api/reviews/%s" % args["id"], None
     if name == "attach_asset":

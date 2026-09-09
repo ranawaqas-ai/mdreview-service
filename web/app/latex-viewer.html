@@ -454,7 +454,7 @@
       <span class="cp-sep" id="cpsep" aria-hidden="true" hidden></span>
       <button id="recompilebtn" type="button" title="Re-run the compile at the current revision" hidden>Recompile</button>
     </div>
-    <span id="topstate"></span><div class="share-wrap"><button id="sharebtn" class="tb-btn" type="button" style="display:none">Share</button><div id="sharepop" class="sharepop" hidden></div></div><div id="acct"></div></div>
+    <span id="topstate"></span><div class="share-wrap"><button id="sharebtn" class="tb-btn" type="button" style="display:none">Share</button><div id="sharepop" class="sharepop" hidden></div></div><div class="share-wrap"><button id="gitbtn" class="tb-btn" type="button" style="display:none">Git</button><div id="gitpop" class="sharepop" hidden></div></div><div id="acct"></div></div>
 </header>
 <div class="split">
   <section class="srcpane" aria-label="LaTeX source">
@@ -1282,8 +1282,45 @@ function renderShare(){
 }
 initShare();
 
+// ---- Git control: clone URL for git-tracked history (#379) — same shape as Share, above.
+// Absent entirely (button never shown) when the backend has the feature off, or on a 404/error;
+// git_url is additive, so this never assumes the route exists. Keep in sync with viewer.html.
+async function initGit(){
+  const btn = document.getElementById("gitbtn"), pop = document.getElementById("gitpop");
+  if(!btn) return;
+  let r; try{ r = await fetch(API + "/git_url", {cache:"no-store"}); }catch(e){ return; }
+  if(r.status !== 200) return;
+  const d = await r.json().catch(()=>({}));
+  if(!d.git_url) return;
+  btn.style.display = "";
+  btn.addEventListener("click", e=>{ e.stopPropagation(); pop.hidden = !pop.hidden; if(!pop.hidden) renderGit(d.git_url); });
+  document.addEventListener("click", e=>{ if(!pop.hidden && !pop.contains(e.target) && e.target!==btn) pop.hidden = true; });
+}
+function renderGit(url){
+  const pop = document.getElementById("gitpop");
+  pop.innerHTML =
+    '<h3>Clone this review</h3>' +
+    '<div class="share-row"><div class="share-lbl">Full revision history<small>Every round, as real git commits</small></div></div>' +
+    '<div class="share-link"><input id="giturl" readonly value="' + _esc(url) + '"><button class="share-copy" id="gitcopy" type="button">Copy</button></div>';
+  const cp = pop.querySelector("#gitcopy");
+  cp.addEventListener("click", async ()=>{
+    const i = pop.querySelector("#giturl"); i.select();
+    try{
+      await navigator.clipboard.writeText(i.value);
+      cp.textContent = "Copied";
+      setTimeout(()=>{ cp.textContent = "Copy"; }, 1400);
+    }catch(e){
+      cp.textContent = "Copy failed";
+      toast('Copy failed — '+((e && e.name) ? e.name : 'clipboard unavailable')+'. The link is selected; copy it manually.');
+      setTimeout(()=>{ cp.textContent = "Copy"; }, 2600);
+    }
+  });
+}
+initGit();
+
 // #222: same dispatcher as the markdown viewer, so the marginal cost here is the table itself.
 mdKeys.pushEscape(()=>{const p=$('#pop');if(!p||p.style.display!=='block')return false;p.style.display='none';return true;});
+mdKeys.pushEscape(()=>{const g=$('#gitpop');if(!g||g.hidden)return false;g.hidden=true;return true;});
 mdKeys.register([
   {keys:"1", label:"Show the LaTeX source",   run:()=>mdKeys.click("#tab-src")},
   {keys:"2", label:"Show source and paper side by side", run:()=>mdKeys.click("#tab-split")},

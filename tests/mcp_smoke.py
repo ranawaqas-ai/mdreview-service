@@ -61,11 +61,11 @@ def main():
     tools = out[1].get("result", {}).get("tools", [])
     names = {t.get("name") for t in tools}
     expected = {"create_review", "list_reviews", "get_review", "get_source", "get_feedback",
-                "get_status", "update_source", "get_history", "delete_review",
+                "get_status", "update_source", "get_history", "get_git_url", "delete_review",
                 "attach_asset", "list_assets",
                 "create_comment", "list_comments", "get_comment", "reply_to_comment", "resolve_comment",
                 "delete_comment", "hand_back", "ping_working", "server_info"}
-    check("tools/list returns exactly the 20 tools", names == expected)
+    check("tools/list returns exactly the 21 tools", names == expected)
     check("each tool has a description + object inputSchema",
           all(t.get("description") and t.get("inputSchema", {}).get("type") == "object" for t in tools))
     # the comment tools must encode the agent workflow in their descriptions (the brief's expectations)
@@ -125,8 +125,8 @@ def main():
     init_hash = init.get("serverInfo", {}).get("tools_hash")
     check("three-way tools_hash identity (serverInfo == server_info tool == --print-version)",
           bool(init_hash) and init_hash == tool_hash == disk_hash)
-    check("server_info tool reports tool_count == 20 (local dispatch, no service touched)",
-          isinstance(tool_hash, str) and json.loads(si[-1]["result"]["content"][0]["text"]).get("tool_count") == 20)
+    check("server_info tool reports tool_count == 21 (local dispatch, no service touched)",
+          isinstance(tool_hash, str) and json.loads(si[-1]["result"]["content"][0]["text"]).get("tool_count") == 21)
     check("create_comment description: author a NEW comment anchored to quoted_text",
           "quoted_text" in desc.get("create_comment", "") and "comment" in desc.get("create_comment", ""))
 

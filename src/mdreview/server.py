@@ -34,6 +34,9 @@ API
   POST   /api/reviews/{id}/comments/{cid}/reopen  {text?}     -> {comment}  (reviewer reopens; 409 if not resolved)
   GET    /api/reviews/{id}/status                             -> {status, source_updated, feedback_updated, comments_updated, revision, can_edit, source_updated_by, ...}
   POST   /api/reviews/{id}/resolve    {resolved: true|false}  -> summary  (human sign-off; cookie plane ONLY, see the arm)
+  GET    /api/reviews/{id}/git_url                            -> {git_url}  (#379, MDREVIEW_ENABLE_GIT_HISTORY only; 404 when off)
+  GET    /git/{id}.git/info/refs                              -> smart-HTTP ref advertisement (#379; `git clone` uses this, not an agent)
+  POST   /git/{id}.git/git-upload-pack                        -> smart-HTTP pack negotiation (#379)
   GET    /review/{id}                                         -> viewer HTML (human opens)
   GET    /static/{file}                                       -> assets (marked/mermaid)
   GET    /healthz                                             -> {ok}
@@ -48,7 +51,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from mdreview.config import (
-    DATA_DIR, DISK_FLOOR, ENABLE_LATEX, LEASE_TTL_S, MAX_BODY, OWNER_EMAIL, PORT, PROXY_SECRET,
+    DATA_DIR, DISK_FLOOR, ENABLE_GIT_HISTORY, ENABLE_LATEX, GIT_CACHE_DIR,
+    GIT_MATERIALIZE_MAX_ROUNDS, LEASE_TTL_S, MAX_BODY, OWNER_EMAIL, PORT, PROXY_SECRET,
     PUBLIC_BASE, REQUIRE_AUTH, RID, TOKEN_PEPPER, WAIT_TIMEOUT_S, WEB_DIR,
 )
 from mdreview.access import OperatorIdentity, OpenPolicy, OwnerPolicy, ProxyBearerIdentity
@@ -100,6 +104,14 @@ class Services:
             import latex_review
             module, self.reviews = latex_review.build(
                 store, self.reviews, self.comments, self.assets)
+            self.modules.append(module)
+
+        if ENABLE_GIT_HISTORY:
+            import git_history
+            from mdreview.git_history_adapter import MdreviewHistorySource
+            source = MdreviewHistorySource(self.reviews, self.comments)
+            module = git_history.build(GIT_CACHE_DIR, GIT_MATERIALIZE_MAX_ROUNDS, source,
+                                        authorize=lambda h, rid: h._authz_read(rid))
             self.modules.append(module)
 
         # Access/identity seam (#103): the tier's injected (IdentityProvider, AccessPolicy) pair.
@@ -264,6 +276,25 @@ class H(BaseHTTPRequestHandler):
         self._audit("denied_404", uid=p.uid, rid=rid)     # probing signal (missing or foreign owner)
         self._json(404, {"error": "not found"})           # 404 (not 403): ownership must not be probeable
         return (None, None)
+
+    def _authz_read(self, rid):
+        """Read-only authorization gate, independent of self.command (#379). _authz derives
+        can_read/can_write from the HTTP verb, which is right for every core arm but wrong for
+        git-upload-pack: that request is a POST (pack negotiation) yet it is a CLONE — a read, not
+        a write. Byte-identical 401/404 shape to _authz's own GET branch; used by git_history's
+        injected `authorize` callable so a repo can never be materialized or served to a caller
+        who could not can_read the review through the normal API."""
+        app = self.server.app
+        p = self._principal()
+        if app.policy.can_read(p, rid):
+            return True
+        if p.is_anonymous:
+            self._audit("auth_fail", path=urlparse(self.path).path)
+            self._json(401, {"error": "authentication required"})
+            return False
+        self._audit("denied_404", uid=p.uid, rid=rid)
+        self._json(404, {"error": "not found"})
+        return False
 
     def _visible_comments(self, rid, arr, with_names=False):
         """The one seam every comment-returning response arm routes through (#368): closes the
@@ -864,6 +895,14 @@ class H(BaseHTTPRequestHandler):
             if out is None:
                 return self._json(404, {"error": "no such round"})
             return self._json(200, out)
+
+        mo = re.fullmatch(r"/api/reviews/" + RID + r"/git_url", path)
+        if mo and m == "GET" and ENABLE_GIT_HISTORY:
+            rid = mo.group(1)
+            uid, plane = self._authz(rid)      # GET -> can_read, exactly what a clone needs
+            if plane is None:
+                return
+            return self._json(200, {"git_url": "%s/git/%s.git" % (self._base(), rid)})
 
         mo = re.fullmatch(r"/api/reviews/" + RID + r"/assets", path)
         if mo:
