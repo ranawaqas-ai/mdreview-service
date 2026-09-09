@@ -10,44 +10,22 @@ import hashlib
 PROTOCOL_VERSION = "2025-06-18"   # MCP spec revision this server targets
 SERVER_INFO = {"name": "mdreview-mcp", "version": "0.1.0"}
 
-# Surfaced to the agent on `initialize` (MCP `instructions`) so the whole workflow reaches it, not
-# just per-tool blurbs.
+# Surfaced to the agent on `initialize` (MCP `instructions`). Kept SHORT on purpose: a client loads
+# this block per connection (a user with several mdreview aliases pays for it several times over,
+# every turn), and Claude Code cuts it at ~2000 chars, so anything past that never reached an agent.
+# The loop lives here; every rule that belongs to one tool lives in that tool's description, which
+# is deferred and costs nothing until the tool is used.
 INSTRUCTIONS = (
-    "mdreview is human-in-the-loop markdown review. Loop: create_review(markdown) -> hand the "
-    "returned review_url to a human -> poll get_status (cheap) and read get_feedback / list_comments "
-    "when it changes -> apply the edits and update_source(id, markdown) (the human's page "
-    "live-reloads). get_source reads the current draft (e.g. when resuming a review you didn't keep "
-    "in memory). Comments are the primary feedback surface: call list_comments(status=\"open\") "
-    "FIRST, reply_to_comment to discuss, resolve_comment only when actually addressed (justification "
-    "optional but recommended — the reviewer can reopen; you never reopen, that's their UI action). "
-    "Watch comments_updated on get_status for thread changes. AUTHOR TO THE VIEWER'S RENDERER: it "
-    "renders Mermaid diagrams (```mermaid), LaTeX math ($…$/$$…$$), GFM footnotes, language-labelled "
-    "syntax-highlighted code, and images (attach_asset) — so a flow / decision tree / state machine / "
-    "architecture belongs in a ```mermaid diagram, NOT ASCII art or a plain ``` fence (which renders as "
-    "monospace text, not a picture). Operate only on reviews you created (on a hosted instance your per-user "
-    "token scopes them to you; a local instance is open and single-user). If a tool you expect is missing or misbehaves, the running server may be stale: "
-    "server_info reports its tools_hash, but you CANNOT conclude 'stale' from inside MCP. An installer-managed "
-    "wrapper (~/.mdreview) self-updates from its own server (MDREVIEW_BASE) on startup, so a stale hash usually "
-    "just means that update lands next session — RECONNECT the client. (Auto-update is skipped for repo/dev "
-    "checkouts and when MDREVIEW_NO_AUTO_UPDATE=1; the server can signal staleness but never reloads itself.) "
-    "LATEX PAPER REVIEWS: create_review(kind=\"latex\") makes a research-paper review shown in an "
-    "Overleaf-style split viewer (LaTeX source + a live server-compiled PDF). For a latex review the "
-    "source is RAW LaTeX end to end — push .tex via update_source, read it via get_source — and the "
-    "markdown authoring rule above (mermaid blocks, $…$ math, labelled fences) does NOT apply. "
-    "Comments still anchor to the source (block_num is the source line). There is no turn baton in "
-    "latex mode, so hand_back / ping_working do not apply. To start a paper from a named class, pass "
-    "create_review(kind=\"latex\", template=\"<id>\"): it seeds the source and supplies the document "
-    "class/style. Bundled ids: ieee, acm, arxiv, lncs, elsevier; download-on-miss ids (fetched on "
-    "first use): acl, iclr2026. GET /api/latex/templates lists them; an unknown id 400s with the list. "
-    "CONVERTING BETWEEN MARKDOWN AND LATEX IS A NEW REVIEW, NOT AN IN-PLACE TRANSFORM: kind is "
-    "immutable, so a markdown review can never become a latex one (or the reverse). If a human asks you "
-    "to 'convert' or re-create a review in the other format, before acting tell them plainly that (1) it "
-    "creates a NEW, separate review (new id + URL); the original is not modified and stays live, (2) the "
-    "content is RE-AUTHORED (markdown and LaTeX are different source languages, so you cannot feed a .md "
-    "into the LaTeX compiler), so it must be re-reviewed, not assumed faithful, and content can be "
-    "silently dropped/added/reworded, (3) comments and history do NOT carry over (approving one is not "
-    "approving the other), and (4) offer to record a link/pointer between the two reviews so the original "
-    "is not orphaned."
+    "mdreview is human-in-the-loop review of a markdown document (or, with kind=\"latex\", a LaTeX "
+    "paper). Loop: create_review -> hand the returned review_url to the human -> poll get_status "
+    "(cheap) -> when it changes, call list_comments(status=\"open\") FIRST, then get_feedback -> apply "
+    "the edits with update_source (the human's page live-reloads) -> reply_to_comment / "
+    "resolve_comment -> hand_back. get_source reads the current draft (e.g. when resuming a review). "
+    "Author for the viewer's renderer: diagrams as ```mermaid blocks, math as $...$, images via "
+    "attach_asset (pass a path), never ASCII art or a plain fence. Operate only on reviews you "
+    "created. If a tool is missing or misbehaves, read the server_info description: it says what "
+    "that means and what to do. Each tool's description carries its own rules (LaTeX mode, "
+    "templates, guarded saves, the turn baton); read it before first use."
 )
 
 _ID = {"type": "string", "description": "the opaque review id"}
@@ -340,7 +318,8 @@ TOOLS = [
                        "(after update_source + reply/resolve on the comments you addressed) or when "
                        "blocked. This is the AGENT's half of the loop; the human's 'Send to agent' and "
                        "'Take back the turn' are viewer actions. For blocked, pair this with a comment "
-                       "reply asking the question — never reopen (reopen is the reviewer's UI action).",
+                       "reply asking the question — never reopen (reopen is the reviewer's UI action). "
+                       "Not available on a kind=latex review: there is no turn baton in latex mode.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -361,7 +340,8 @@ TOOLS = [
                        "viewer shows 'Agent is working…' instead of a stale 'Agent may have stopped' "
                        "hint. `owner` is YOUR opaque session id; a review already leased by a DIFFERENT "
                        "owner returns an error (HTTP 409) — back off and skip it (another agent holds "
-                       "it). Does NOT change whose turn it is.",
+                       "it). Does NOT change whose turn it is. Not available on a kind=latex review: "
+                       "there is no turn baton in latex mode.",
         "inputSchema": {
             "type": "object",
             "properties": {
