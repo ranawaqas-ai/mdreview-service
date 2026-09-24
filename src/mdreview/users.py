@@ -255,10 +255,12 @@ class UserService:
         store.lock. Format: mdr_<tok_id>_<secret> (tok_id is the public handle for O(1) lookup +
         revoke; the secret is never stored). ttl_s gives the token an expiry (OAuth access tokens,
         #395); without it the token lives until revoked, as every token minted on /account does."""
-        tok_id = secrets.token_hex(4)
         secret = secrets.token_urlsafe(32)
         now = time.time()
         data = self._load()
+        tok_id = secrets.token_hex(4)
+        while tok_id in data["tokens"]:          # a collision would overwrite someone's token
+            tok_id = secrets.token_hex(4)
         # Expired rows never resolve, but an OAuth refresh reads a row's PRESENCE as "not revoked"
         # (hosted/oauth.py), so a row is only dropped once it is past any refresh token's lifetime.
         data["tokens"] = {k: r for k, r in data["tokens"].items()
@@ -296,11 +298,14 @@ class UserService:
         return rec.get("uid")
 
     def list_tokens(self, uid):
+        """Every token the user can revoke. An expired OAuth access row stays listed until pruned,
+        because its refresh token can still mint a new one: hiding it would leave a live connector
+        with nothing on /account to revoke."""
         toks = self._load()["tokens"]
         return sorted(
             [{"tok_id": tid, "label": r.get("label", ""), "created": r.get("created", 0),
               "expires": r.get("expires")}
-             for tid, r in toks.items() if r.get("uid") == uid and not self._expired(r, time.time())],
+             for tid, r in toks.items() if r.get("uid") == uid],
             key=lambda t: t["created"], reverse=True)
 
     def revoke_token(self, uid, tok_id):

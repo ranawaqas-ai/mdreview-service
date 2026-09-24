@@ -35,7 +35,11 @@ from mdreview.hosted.authroutes import RETURN_COOKIE, AuthModule   # _redeem hon
 
 ALLOWED_REDIRECTS = ("https://claude.ai/api/mcp/auth_callback",
                      "https://claude.com/api/mcp/auth_callback")
-_LOOPBACK_HOSTS = ("localhost", "127.0.0.1")
+# One whole-string match, never a parsed hostname: urlparse and browsers disagree on inputs such as
+# "http://evil.example\@localhost/cb" (Python sees localhost, a browser goes to evil.example), and
+# urlsplit silently drops CR/LF that would otherwise reach a Location header.
+_LOOPBACK = re.compile(r"http://(localhost|127\.0\.0\.1)(?::\d{1,5})?(/[A-Za-z0-9._~%/-]*)?")
+MAX_REDIRECT_URIS = 10
 
 ACCESS_TTL_S = 3600
 REFRESH_TTL_S = 30 * 86400
@@ -55,21 +59,20 @@ def canonical_resource(url):
 
 
 def redirect_allowed(uri):
-    if uri in ALLOWED_REDIRECTS:
-        return True
-    p = urlparse(uri)
-    return p.scheme == "http" and p.hostname in _LOOPBACK_HOSTS and not p.query and not p.fragment
+    return uri in ALLOWED_REDIRECTS or bool(_LOOPBACK.fullmatch(uri))
 
 
 def redirect_matches(registered, uri):
-    """Exact match, except a loopback URI may differ in port (RFC 8252 section 7.3)."""
+    """Exact match, except a loopback URI may differ in port (RFC 8252 section 7.3). The requested
+    URI must itself pass redirect_allowed, whatever was registered."""
+    if not redirect_allowed(uri):
+        return False
     if uri in registered:
         return True
-    p = urlparse(uri)
-    if p.scheme != "http" or p.hostname not in _LOOPBACK_HOSTS:
-        return False
-    return any(urlparse(r).hostname == p.hostname and urlparse(r).path == p.path
-               and urlparse(r).scheme == "http" for r in registered)
+    m = _LOOPBACK.fullmatch(uri)
+    return bool(m) and any(
+        (r_m.group(1), r_m.group(2) or "") == (m.group(1), m.group(2) or "")
+        for r_m in (_LOOPBACK.fullmatch(r) for r in registered) if r_m)
 
 
 def pkce_ok(verifier, challenge):
@@ -128,17 +131,16 @@ class OAuthModule:
             return self._json(h, 400, {"error": "invalid_client_metadata",
                                        "error_description": "expected a JSON object"})
         uris = body.get("redirect_uris")
-        if not isinstance(uris, list) or not uris or not all(isinstance(u, str) for u in uris):
+        if not isinstance(uris, list) or not 0 < len(uris) <= MAX_REDIRECT_URIS \
+                or not all(isinstance(u, str) and len(u) <= 2048 for u in uris):
             return self._json(h, 400, {"error": "invalid_redirect_uri",
-                                       "error_description": "redirect_uris must be a non-empty list"})
+                                       "error_description": "redirect_uris must be 1-%d URIs" % MAX_REDIRECT_URIS})
         bad = [u for u in uris if not redirect_allowed(u)]
         if bad:
             return self._json(h, 400, {"error": "invalid_redirect_uri",
-                                       "error_description": "redirect URI not allowed: %s" % bad[0]})
+                                       "error_description": "redirect URI not allowed: %r" % bad[0][:200]})
         name = str(body.get("client_name") or "MCP client")[:80]
         client_id = self.db.register_client(name, uris)
-        if client_id is None:
-            return self._json(h, 503, {"error": "temporarily_unavailable"})
         return self._json(h, 201, {"client_id": client_id, "client_name": name, "redirect_uris": uris,
                                    "token_endpoint_auth_method": "none",
                                    "grant_types": ["authorization_code", "refresh_token"],
@@ -254,6 +256,8 @@ class OAuthModule:
     # ---- responses ----
     @staticmethod
     def _respond(h, code, body, ctype="application/json", cookies=None, location=None):
+        if location and ("\r" in location or "\n" in location):     # never split a header
+            code, body, location = 400, json.dumps({"error": "invalid_request"}), None
         AuthModule._respond(h, code, body, ctype, cookies=cookies, location=location)
         return True
 
