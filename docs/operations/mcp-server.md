@@ -33,6 +33,24 @@ this exact block with the token already filled in, so you only correct the local
 
 Use an **absolute interpreter path**, not a bare `python3`: `python3` resolves to whatever is first on the client's PATH (often an old system Python), and a stale or misconfigured system HTTP proxy that such an interpreter honors can make every backend call fail with a bogus "connection refused". Point `args` at the file **inside your checkout** so a `git pull` keeps the wrapper current with no rebuild or re-publish; a change to the wrapper's own code still needs one client reconnect to load (a stdio server reads its code once at startup).
 
+## Claude Code plugin
+
+`.claude-plugin/marketplace.json` makes this repo a plugin marketplace with one plugin,
+`plugins/mdreview` (#393). The plugin carries no wrapper code of its own. `plugins/mdreview/mcp_server.py`
+and `plugins/mdreview/mcp` are symlinks into `src/`, and an install copies their targets into the
+plugin cache, so the plugin always ships the same wrapper the installer does. The token is a
+`userConfig` option marked sensitive (keychain, never settings.json). The plugin sets
+`MDREVIEW_NO_AUTO_UPDATE=1` because its version is the update channel: bump `version` in
+`plugins/mdreview/.claude-plugin/plugin.json` when the wrapper changes, or `/plugin update` will not
+pick it up.
+
+The plugin runs a bare `python3`, since it can't know an absolute path on the user's machine, so the
+interpreter caveat above applies to it too. `/plugin marketplace add` reads the default branch, so the
+plugin becomes installable once it reaches `main`.
+
+Checks: `tests/plugin_manifest_selfcheck.py` runs in pr-checks. `claude plugin validate . --strict` and
+`claude plugin validate plugins/mdreview --strict` need the CLI, so run them by hand when a manifest changes.
+
 ## Developing mdreview-service itself
 
 The "point `args` at your checkout" advice above is for *using* the service, where you aren't

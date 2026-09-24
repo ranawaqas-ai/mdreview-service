@@ -1,0 +1,29 @@
+{
+  "name": "mdreview",
+  "version": "0.1.0",
+  "description": "Human-in-the-loop document review for agents: push a markdown or LaTeX draft, a person comments in the browser, the agent reads the comments and revises.",
+  "author": { "name": "Rana Waqas", "url": "https://mdreview.space" },
+  "homepage": "https://mdreview.space",
+  "repository": "https://github.com/ranawaqas-ai/mdreview-service",
+  "license": "Apache-2.0",
+  "keywords": ["review", "markdown", "latex", "human-in-the-loop", "comments"],
+  "userConfig": {
+    "token": {
+      "type": "string",
+      "title": "mdreview agent token",
+      "description": "An mdr_ token from https://app.mdreview.space/account (Agent tokens).",
+      "sensitive": true
+    }
+  },
+  "mcpServers": {
+    "mdreview": {
+      "command": "python3",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp_server.py"],
+      "env": {
+        "MDREVIEW_BASE": "https://app.mdreview.space",
+        "MDREVIEW_TOKEN": "${user_config.token}",
+        "MDREVIEW_NO_AUTO_UPDATE": "1"
+      }
+    }
+  }
+}

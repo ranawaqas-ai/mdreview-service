@@ -113,3 +113,29 @@ jobs:
       # nothing in web/app/** (see the file header), so that check is run by hand each PR.
       - name: Share scope selfcheck
         run: python3 tests/share_scope_selfcheck.py
+
+      # #393: the Claude Code plugin + marketplace manifests. The plugin's wrapper is symlinks into
+      # src/, so this catches a stale real copy, a missing manifest field, or a copied install that
+      # no longer starts. `claude plugin validate` is stricter but needs the CLI; run it by hand.
+      - name: Plugin manifest selfcheck
+        run: python3 tests/plugin_manifest_selfcheck.py
+
+      # #394: every MCP tool carries a title and readOnly/destructive/openWorld hints, read from
+      # the wrapper's real tools/list. The Connectors Directory rejects an unannotated tool, and
+      # clients use the hints to decide which calls need the user's confirmation.
+      - name: Tool annotations selfcheck
+        run: python3 tests/tool_annotations_selfcheck.py
+
+      # #395: POST /mcp, the remote MCP transport. Boots a local and a hosted instance and checks the
+      # Streamable HTTP rules (202/405/400/403), the 401 + resource_metadata an OAuth client starts
+      # from, per-user isolation through /mcp, token revocation, and that attach_asset's `path`
+      # never reads the server's disk. Stdlib-only.
+      - name: MCP HTTP transport selfcheck
+        run: python3 tests/mcp_http_selfcheck.py
+
+      # #395: the OAuth server a claude.ai connector signs in through. Walks discovery, DCR,
+      # authorize (incl. sign-in return), consent, token, refresh rotation and /account revocation
+      # on a throwaway hosted instance, then attacks each step (foreign redirect, wrong verifier,
+      # code replay, forged consent, wrong resource, spent refresh). Mutation-checked.
+      - name: OAuth selfcheck
+        run: python3 tests/oauth_selfcheck.py

@@ -15,6 +15,10 @@ import secrets
 import time
 
 
+# Longer than the OAuth refresh-token lifetime (30 days): see mint_token's prune.
+_PRUNE_GRACE_S = 31 * 86400
+
+
 class UserService:
     # #309: trimmed, 1-60 chars, display-only (no uniqueness claim). 60 keeps a name from wrapping
     # the .acct-row-value column (max-width:220px) or the comment-thread .gwho onto a second line at
@@ -246,17 +250,37 @@ class UserService:
     def _digest(self, secret):
         return hmac.new(self._pepper, secret.encode(), hashlib.sha256).hexdigest()
 
-    def mint_token(self, uid, label=""):
+    def mint_token(self, uid, label="", ttl_s=None):
         """Return the plaintext token (shown ONCE). Store only its HMAC digest. Caller holds
         store.lock. Format: mdr_<tok_id>_<secret> (tok_id is the public handle for O(1) lookup +
-        revoke; the secret is never stored)."""
-        tok_id = secrets.token_hex(4)
+        revoke; the secret is never stored). ttl_s gives the token an expiry (OAuth access tokens,
+        #395); without it the token lives until revoked, as every token minted on /account does."""
         secret = secrets.token_urlsafe(32)
+        now = time.time()
         data = self._load()
-        data["tokens"][tok_id] = {"uid": uid, "hash": self._digest(secret),
-                                  "label": label or "", "created": time.time()}
+        tok_id = secrets.token_hex(4)
+        while tok_id in data["tokens"]:          # a collision would overwrite someone's token
+            tok_id = secrets.token_hex(4)
+        # Expired rows never resolve, but an OAuth refresh reads a row's PRESENCE as "not revoked"
+        # (hosted/oauth.py), so a row is only dropped once it is past any refresh token's lifetime.
+        data["tokens"] = {k: r for k, r in data["tokens"].items()
+                          if not self._expired(r, now - _PRUNE_GRACE_S)}
+        rec = {"uid": uid, "hash": self._digest(secret), "label": label or "", "created": now}
+        if ttl_s:
+            rec["expires"] = now + ttl_s
+        data["tokens"][tok_id] = rec
         self._save(data)
         return "mdr_%s_%s" % (tok_id, secret)
+
+    @staticmethod
+    def token_id(token):
+        """The public tok_id of a plaintext mdr_ token, or None."""
+        parts = (token or "").split("_", 2)
+        return parts[1] if len(parts) == 3 and parts[0] == "mdr" else None
+
+    @staticmethod
+    def _expired(rec, now):
+        return bool(rec.get("expires")) and rec["expires"] <= now
 
     def resolve(self, authorization):
         """Authorization header value -> uid or None. Constant-time digest compare; unknown/forged
@@ -269,12 +293,18 @@ class UserService:
         rec = self._load()["tokens"].get(parts[1])
         if not rec or not hmac.compare_digest(rec.get("hash", ""), self._digest(parts[2])):
             return None
+        if self._expired(rec, time.time()):
+            return None
         return rec.get("uid")
 
     def list_tokens(self, uid):
+        """Every token the user can revoke. An expired OAuth access row stays listed until pruned,
+        because its refresh token can still mint a new one: hiding it would leave a live connector
+        with nothing on /account to revoke."""
         toks = self._load()["tokens"]
         return sorted(
-            [{"tok_id": tid, "label": r.get("label", ""), "created": r.get("created", 0)}
+            [{"tok_id": tid, "label": r.get("label", ""), "created": r.get("created", 0),
+              "expires": r.get("expires")}
              for tid, r in toks.items() if r.get("uid") == uid],
             key=lambda t: t["created"], reverse=True)
 

@@ -20,8 +20,9 @@ import json
 import re
 import smtplib
 import sys
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
+RETURN_COOKIE = "mdr_return"   # set by oauth.OAuthModule on an anonymous /oauth/authorize (#395)
 _SEC_HEADERS = (("Cache-Control", "no-store"), ("X-Content-Type-Options", "nosniff"))
 
 # Shared styling for the two server-rendered auth pages (confirm / invalid link), so this interstitial
@@ -180,9 +181,25 @@ class AuthModule:
         cookie_value, _csrf = self.sessions.mint(
             uid, email, ip=self._client_ip(h), user_agent=h.headers.get("User-Agent", ""))
         self.id_store.audit("login", uid=uid, email=email, ip=self._client_ip(h), detail="magic-link")
-        self._respond(h, 303, b"", "text/plain",
-                      cookies=[self.sessions.set_cookie_header(cookie_value)], location="/")
+        cookies = [self.sessions.set_cookie_header(cookie_value)]
+        back = self._return_to(h)
+        if back != "/":
+            cookies.append("%s=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax" % RETURN_COOKIE)
+        self._respond(h, 303, b"", "text/plain", cookies=cookies, location=back)
         return True
+
+    @staticmethod
+    def _return_to(h):
+        """Where sign-in lands: "/" unless an OAuth authorize request sent the browser here first
+        (#395). Only a same-origin /oauth/authorize path is honoured, so the cookie can never turn
+        sign-in into an open redirect."""
+        for part in (h.headers.get("Cookie") or "").split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == RETURN_COOKIE:
+                path = unquote(v)
+                if re.fullmatch(r"/oauth/authorize\?[^\s\\]{1,2000}", path):
+                    return path
+        return "/"
 
     # ---- GET /auth/session (identity + CSRF; slides the lifetime) ----
     def _session(self, h):

@@ -12,8 +12,8 @@ Protocol grounded against the MCP spec rev 2025-06-18 (lifecycle + tools).
   tools/call                -> {content:[{type:text,text}], isError?}   (dispatch: MR-016)
 
 Split from the original single-file mcp_server.py: `tools` (the agent-visible schema surface +
-identity/tools_hash), `client` (the HTTP client + tool->endpoint routing), and `__main__` (the
-JSON-RPC framing, dispatch, and lifecycle handlers). Run with `python -m mcp`; the legacy
+identity/tools_hash), `client` (the HTTP client + tool->endpoint routing), `rpc` (the JSON-RPC
+dispatch, shared with the service's own /mcp endpoint), and `__main__` (stdio framing + lifecycle). Run with `python -m mcp`; the legacy
 `python3 src/mcp_server.py` path still works via a back-compat shim that re-exports main().
 
 Comment workflow (MR-035): list_comments / get_comment / reply_to_comment / resolve_comment let an

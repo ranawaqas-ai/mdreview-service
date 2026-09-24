@@ -29,6 +29,8 @@ from mdreview.hosted.authroutes import AuthModule
 from mdreview.hosted.custody import CustodyPolicy
 from mdreview.hosted.identity import AccountService, HostedIdentity
 from mdreview.hosted.identity_store import IdentityStore
+from mdreview.hosted.oauth import OAuthModule
+from mdreview.hosted.oauth_store import OAuthStore
 from mdreview.hosted.magiclink import MagicLinkService, SmtpEmailSender, StubEmailSender
 from mdreview.hosted.sessions import SessionService
 from mdreview.hosted.shares import ShareStore
@@ -181,4 +183,8 @@ def build_hosted(store):
     app.modules.append(AuthModule(store, app.users, sessions, magic, accounts, id_store))
     app.modules.append(AdminModule(store, app.users, id_store, sessions))
     app.modules.append(SharingModule(app.reviews, shares, sessions, app.users))
+    # #395: the OAuth server a remote MCP client (claude.ai connector) signs in through. Hosted only;
+    # the local tier is authless, so its /mcp never answers 401.
+    app.modules.append(OAuthModule(link_base, store, app.users,
+                                   OAuthStore(os.path.join(config.DATA_DIR, "oauth.db")), id_store))
     return app

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Privacy policy · mdreview</title>
+<meta name="description" content="What the hosted mdreview service stores, who can see it, and how to have it deleted.">
+<link rel="canonical" href="https://mdreview.space/privacy/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%237c6cff'/%3E%3Ctext x='16' y='23' font-size='17' font-family='sans-serif' font-weight='700' fill='%23fff' text-anchor='middle'%3Emd%3C/text%3E%3C/svg%3E">
+<style>
+  :root{--bg:#fafafc;--panel:#fff;--text:#17181d;--muted:#6b7280;--rule:#e7e8ee;--accent:#7c6cff;--code:#f4f4f8}
+  @media (prefers-color-scheme: dark){
+    :root{--bg:#0e0f13;--panel:#171922;--text:#e6e8ee;--muted:#9aa0ac;--rule:#262a33;--accent:#9184ff;--code:#1b1d24}
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font:16px/1.65 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  header{border-bottom:1px solid var(--rule)}
+  .bar{max-width:760px;margin:0 auto;padding:0 16px;height:60px;display:flex;align-items:center;gap:10px}
+  .logo{width:28px;height:28px;border-radius:7px;background:var(--accent);color:#fff;font-weight:700;font-size:14px;display:grid;place-items:center}
+  .bar a{color:var(--text);font-weight:650;text-decoration:none;display:flex;align-items:center;gap:10px}
+  main{max-width:760px;margin:0 auto;padding:40px 16px 72px}
+  h1{font-size:32px;line-height:1.2;margin-bottom:6px}
+  h2{font-size:20px;margin:36px 0 10px}
+  p,li{color:var(--text)}
+  p+p,ul,ul+p{margin-top:10px}
+  ul{padding-left:22px}
+  li+li{margin-top:6px}
+  .muted{color:var(--muted);font-size:14px}
+  a{color:var(--accent)}
+  code{background:var(--code);border-radius:4px;padding:1px 5px;font-size:14px}
+  .table-wrap{overflow-x:auto;margin-top:10px}
+  table{border-collapse:collapse;width:100%;min-width:480px;font-size:15px}
+  th,td{border-bottom:1px solid var(--rule);padding:8px 10px;text-align:left;vertical-align:top}
+  th{color:var(--muted);font-weight:600}
+</style>
+</head>
+<body>
+<header><div class="bar"><a href="/"><span class="logo">md</span>mdreview</a></div></header>
+<main>
+  <h1>Privacy policy</h1>
+  <p class="muted">Last updated 25 September 2026</p>
+
+  <p style="margin-top:20px">This policy covers the hosted mdreview service at app.mdreview.space, and the mdreview MCP
+  server and Claude connector when they are pointed at that service. If you run mdreview yourself, your data stays
+  on your machine and this policy does not apply.</p>
+
+  <h2>What we store</h2>
+  <p><strong>Your account.</strong> Your email address, when the account was created, and whether it is active. You
+  sign in with a one-time link sent to that address.</p>
+  <p><strong>What you put into reviews.</strong> Documents (markdown or LaTeX), every past round of a document,
+  comments and replies, feedback notes, and files you attach. This is the service, so we keep it until you delete it.</p>
+  <p><strong>Sign-in and security records.</strong></p>
+  <ul>
+    <li>For each browser session: when it started and was last used, the IP address, and the browser's user agent.
+    You can see and end your sessions on the Account page.</li>
+    <li>Agent tokens and connector tokens: a keyed hash of each token, never the token itself. You can revoke them
+    on the Account page.</li>
+    <li>A security log of sign-in events: the event, the time, the account, the email and the IP address.</li>
+    <li>For sign-in emails: the address and requesting IP of each send, kept for two days to stop abuse, then
+    deleted.</li>
+    <li>The web server's standard access logs: IP address, time and requested path.</li>
+  </ul>
+  <p>We use no analytics, no advertising and no tracking cookies. The cookies we set are for signing you in.</p>
+
+  <h2>Who can see your reviews</h2>
+  <ul>
+    <li><strong>You.</strong> Every review belongs to the account that created it. Only the owner can edit or delete it.</li>
+    <li><strong>People you share with.</strong> A named share lets one person view it, or view and comment. A public
+    link lets anyone with the link view it, but not comment. You can revoke shares.</li>
+    <li><strong>Your agents and connectors.</strong> An agent token, or an app you connect such as Claude, acts as
+    you and has your access. You approve each connector on a consent screen and can revoke it on the Account page.</li>
+    <li><strong>The operator, rarely.</strong> The service administrator can read a specific review for support or
+    abuse handling. That access is read-only, off by default, one document at a time, and every use is recorded in
+    an audit log.</li>
+  </ul>
+  <p>We do not sell your data, use it to train AI models, or share it with anyone else except as the law requires.</p>
+
+  <h2>Services we rely on</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Service</th><th>What it gets</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Hostinger (virtual server in Germany)</td><td>Everything above, stored on its disks</td><td>Running app.mdreview.space</td></tr>
+      <tr><td>Microsoft Azure Communication Services</td><td>Your email address and the sign-in link</td><td>Sending sign-in emails</td></tr>
+      <tr><td>GitHub Pages</td><td>Standard request logs</td><td>Hosting mdreview.space (this site and the docs, not the app)</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Keeping and deleting</h2>
+  <p>Reviews, comments and attachments stay until you delete them. The dashboard and the <code>delete_review</code>
+  tool both remove a review. There is no self-serve account deletion yet: email
+  <a href="mailto:rana.waqas.works@gmail.com">rana.waqas.works@gmail.com</a> and we will delete your account and
+  everything it owns within 30 days.</p>
+
+  <h2>Contact</h2>
+  <p>Questions or requests: <a href="mailto:rana.waqas.works@gmail.com">rana.waqas.works@gmail.com</a>.</p>
+  <p>We will post changes to this page and update the date at the top.</p>
+</main>
+</body>
+</html>

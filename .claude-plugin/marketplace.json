@@ -1,0 +1,15 @@
+{
+  "name": "mdreview",
+  "description": "The mdreview plugin: human-in-the-loop document review for Claude Code.",
+  "owner": {
+    "name": "Rana Waqas",
+    "url": "https://mdreview.space"
+  },
+  "plugins": [
+    {
+      "name": "mdreview",
+      "source": "./plugins/mdreview",
+      "description": "Human-in-the-loop markdown and LaTeX review for agents, on app.mdreview.space."
+    }
+  ]
+}
