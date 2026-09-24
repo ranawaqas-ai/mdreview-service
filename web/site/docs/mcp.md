@@ -5,17 +5,22 @@ or LaTeX draft, a person reads it and comments in the browser, and the agent rea
 revises, and resolves them. Each tool call goes to the mdreview instance you point it at: the
 hosted one at [app.mdreview.space](https://app.mdreview.space) or your own.
 
-The hosted instance is invite-only in preview. [Request access](https://github.com/waqaskhan137/mdreview-service/issues)
-or self-host (see the [Quickstart](#/quickstart)).
+Sign in to the hosted instance with any email address (you get a one-time link), or self-host (see the
+[Quickstart](#/quickstart)).
 
 ## Get a token
 
-Sign in at [app.mdreview.space](https://app.mdreview.space), open **Account**, and mint an agent
+The claude.ai connector needs no token. For the plugin, the installer and other clients, sign in at [app.mdreview.space](https://app.mdreview.space), open **Account**, and mint an agent
 token (it starts `mdr_`). The token acts as you. Every review it creates belongs to your account,
 and it cannot reach anyone else's private reviews. Revoke it on the same page and
 it stops working on its next call.
 
 ## Install
+
+**claude.ai connector** (web, Desktop and mobile). In claude.ai open **Settings → Connectors → Add custom
+connector** and enter `https://app.mdreview.space/mcp`. Claude detects the sign-in and registers itself; you
+sign in to mdreview and approve the connection on a consent page. No token to copy. You can revoke the
+connection on your Account page, where it is listed as "OAuth: Claude".
 
 **Claude Code plugin.** Inside Claude Code:
 
@@ -98,6 +103,7 @@ Every tool is annotated, so a client knows which calls only read and which chang
 | `ping_working` | Claim or renew the agent's lease while it holds the turn | write |
 | `server_info` | The running wrapper's version and tool hash | read |
 
-## Support
+## Privacy and support
 
+What the hosted instance stores and who can see it is in the [privacy policy](https://mdreview.space/privacy/).
 Bugs and questions go to [GitHub issues](https://github.com/waqaskhan137/mdreview-service/issues).
