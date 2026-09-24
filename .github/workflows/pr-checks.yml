@@ -119,3 +119,9 @@ jobs:
       # no longer starts. `claude plugin validate` is stricter but needs the CLI; run it by hand.
       - name: Plugin manifest selfcheck
         run: python3 tests/plugin_manifest_selfcheck.py
+
+      # #394: every MCP tool carries a title and readOnly/destructive/openWorld hints, read from
+      # the wrapper's real tools/list. The Connectors Directory rejects an unannotated tool, and
+      # clients use the hints to decide which calls need the user's confirmation.
+      - name: Tool annotations selfcheck
+        run: python3 tests/tool_annotations_selfcheck.py
