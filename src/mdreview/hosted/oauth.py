@@ -16,10 +16,12 @@ connector: its refresh token names the access token's tok_id, and a refresh whos
 refused. CIMD is deliberately not advertised (client_id_metadata_document_supported absent), so
 clients use registration and this server never fetches a client-supplied URL.
 
-Consent is protected three ways: the request is re-validated and parked server-side (pending row),
-the form carries only that row's nonce, and the POST must also present the same nonce in a
-SameSite=Lax cookie, which a cross-site form post does not send. The pending row is bound to the
-uid that saw the page. The page refuses to be framed.
+Consent is protected by the pending row: the request is re-validated and parked server-side under
+an unguessable nonce bound to the uid that saw the page, and the form carries only that nonce, so a
+forged POST would need a nonce only the victim's own page ever showed. The POST must also come from
+this origin (Origin, else Sec-Fetch-Site), and the page refuses to be framed. There is deliberately
+no consent cookie: one cookie per browser meant a second consent load (a retried popup, an old tab)
+silently invalidated the first page's Allow button.
 """
 import base64
 import hashlib
@@ -39,7 +41,6 @@ ACCESS_TTL_S = 3600
 REFRESH_TTL_S = 30 * 86400
 CODE_TTL_S = 600
 CONSENT_TTL_S = 600
-CONSENT_COOKIE = "mdr_oauth_consent"
 
 _FRAME_HEADERS = (("Content-Security-Policy", "frame-ancestors 'none'"), ("X-Frame-Options", "DENY"))
 
@@ -186,35 +187,29 @@ class OAuthModule:
                  "<input type=hidden name=nonce value='%s'>"
                  "<button name=decision value=approve>Allow</button> "
                  "<button name=decision value=deny>Cancel</button></form>") % (app_name, who, dest, nonce)
-        cookie = "%s=%s; Max-Age=%d; Path=/oauth/authorize; HttpOnly; Secure; SameSite=Lax" % (
-            CONSENT_COOKIE, nonce, CONSENT_TTL_S)
-        return self._page(h, 200, "Allow access", inner, cookies=[cookie])
+        return self._page(h, 200, "Allow access", inner)
 
     # ---- POST /oauth/authorize ----
     def _consent(self, h):
         form = AuthModule._form(h)
         nonce = form.get("nonce", "")
-        cookie_nonce = self._cookie(h, CONSENT_COOKIE)
         p = h._principal()
-        if not nonce or p.is_anonymous \
-                or not hmac.compare_digest(nonce.encode("utf-8"), cookie_nonce.encode("utf-8")):
+        if not nonce or p.is_anonymous or not self._same_origin(h):
             return self._page(h, 403, "Cannot sign in", "<h1>This approval could not be verified</h1>"
                               "<p>Start the connection again from the application.</p>")
         pending = self.db.take_pending(nonce)
         if not pending or pending["uid"] != p.uid:
             return self._page(h, 403, "Cannot sign in", "<h1>This approval has expired</h1>"
                               "<p>Start the connection again from the application.</p>")
-        clear = "%s=; Max-Age=0; Path=/oauth/authorize; HttpOnly; Secure; SameSite=Lax" % CONSENT_COOKIE
         if form.get("decision") != "approve":
-            return self._redirect_error(h, pending["redirect_uri"], pending["state"], "access_denied",
-                                        cookies=[clear])
+            return self._redirect_error(h, pending["redirect_uri"], pending["state"], "access_denied")
         code = self.db.put_code(p.uid, pending["client_id"], pending["redirect_uri"],
                                 pending["challenge"], pending["resource"], CODE_TTL_S)
         self.db.mark_used(pending["client_id"])
         self.id_store.audit("oauth_grant", uid=p.uid, ip=AuthModule._client_ip(h),
                             detail=pending["client_id"])
         return self._respond(h, 302, b"", location=self._with_query(
-            pending["redirect_uri"], {"code": code, "state": pending["state"]}), cookies=[clear])
+            pending["redirect_uri"], {"code": code, "state": pending["state"]}))
 
     # ---- POST /oauth/token ----
     def _token(self, h):
@@ -287,13 +282,15 @@ class OAuthModule:
     def _with_query(uri, params):
         return uri + ("&" if urlparse(uri).query else "?") + urlencode({k: v for k, v in params.items() if v})
 
-    @staticmethod
-    def _cookie(h, name):
-        for part in (h.headers.get("Cookie") or "").split(";"):
-            k, _, v = part.strip().partition("=")
-            if k == name:
-                return v
-        return ""
+    def _same_origin(self, h):
+        """A browser form post names its origin; one from another site is refused. With neither
+        header (not a browser) there is no victim session to ride, so the nonce check suffices."""
+        origin = h.headers.get("Origin")
+        if origin:
+            own = urlparse(self.base)
+            return origin == "%s://%s" % (own.scheme, own.netloc)
+        site = h.headers.get("Sec-Fetch-Site")
+        return site in (None, "same-origin")
 
     @staticmethod
     def _raw(h):
