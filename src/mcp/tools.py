@@ -368,6 +368,43 @@ TOOLS = [
     },
 ]
 
+# MCP tool annotations (#394). Clients use them to decide what needs the user's confirmation, and
+# the Connectors Directory requires them on every tool. openWorldHint is false throughout: every
+# tool touches only the caller's own mdreview data. update_source is marked destructive although
+# history keeps the prior round, because it replaces the draft the human is looking at.
+_READ, _WRITE, _DESTRUCTIVE = (
+    {"readOnlyHint": True, "openWorldHint": False},
+    {"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False},
+    {"readOnlyHint": False, "destructiveHint": True, "openWorldHint": False},
+)
+_ANNOTATIONS = {
+    "list_reviews": ("List reviews", _READ),
+    "get_review": ("Get review", _READ),
+    "get_source": ("Get review source", _READ),
+    "get_feedback": ("Get review feedback", _READ),
+    "get_status": ("Get review status", _READ),
+    "get_history": ("Get review history", _READ),
+    "get_git_url": ("Get review git URL", _READ),
+    "list_assets": ("List review assets", _READ),
+    "list_comments": ("List comments", _READ),
+    "get_comment": ("Get comment", _READ),
+    "server_info": ("Server info", _READ),
+    "create_review": ("Create review", _WRITE),
+    "attach_asset": ("Attach asset", _WRITE),
+    "create_comment": ("Create comment", _WRITE),
+    "reply_to_comment": ("Reply to comment", _WRITE),
+    "resolve_comment": ("Resolve comment", _WRITE),
+    "hand_back": ("Hand review back", _WRITE),
+    "ping_working": ("Signal agent is working", _WRITE),
+    "update_source": ("Update review source", _DESTRUCTIVE),
+    "delete_review": ("Delete review", _DESTRUCTIVE),
+    "delete_comment": ("Delete comment", _DESTRUCTIVE),
+}
+for _tool in TOOLS:
+    _title, _hints = _ANNOTATIONS[_tool["name"]]   # KeyError here = a new tool with no annotation
+    _tool["title"] = _title
+    _tool["annotations"] = dict(_hints, title=_title)
+
 
 def _tools_hash():
     """sha256 (12 hex) over the agent-visible surface: the TOOLS schema + INSTRUCTIONS. Changes
