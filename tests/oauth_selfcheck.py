@@ -9,7 +9,8 @@ POST, a wrong resource, a spent refresh token, and a token revoked on /account.
 
 Boots a throwaway hosted instance (stub email; the magic link is read from the server log).
 
-Mutation checks: make pkce_ok return True and the wrong-verifier case fails; make redirect_allowed
+Mutation checks: prune expired rows in UserService.mint_token with no grace and the idle-connector
+case fails; make pkce_ok return True and the wrong-verifier case fails; make redirect_allowed
 return True and the foreign-redirect case fails; drop the cookie-nonce comparison in _consent and
 the forged-consent case fails.
 
@@ -86,8 +87,6 @@ def pkce():
 
 class Instance:
     def __init__(self):
-        shutil.rmtree(DATA, ignore_errors=True)
-        os.makedirs(DATA)
         port = free()
         self.base = "http://127.0.0.1:%d" % port
         self.log = os.path.join(DATA, "server.log")
@@ -148,7 +147,29 @@ def approve(inst, session, nonce, cookie_nonce, decision="approve"):
     return form(inst.base + "/oauth/authorize", {"nonce": nonce, "decision": decision}, {"Cookie": cookie})
 
 
+def expired_row_survives_other_mints():
+    """An idle connector's access token expires after 1h. Another user's mint must not prune its
+    row, because the refresh grant reads a missing row as "revoked on /account"."""
+    sys.path.insert(0, os.path.join(ROOT, "src"))
+    from mdreview.store import Store
+    from mdreview.users import UserService
+    d = os.path.join(DATA, "unit")
+    os.makedirs(d, exist_ok=True)
+    users = UserService(Store(d), "pepper")
+    with users.store.lock:
+        idle = users.mint_token("u:1", "OAuth: Claude", ttl_s=-1)      # already expired
+        users.mint_token("u:2", "someone else")                        # triggers the prune
+        survived = users.revoke_token("u:1", users.token_id(idle))
+    check("an expired access row survives other mints, so an idle connector can still refresh",
+          survived)
+    check("...while the expired token itself no longer authenticates",
+          users.resolve("Bearer " + idle) is None)
+
+
 def main():
+    shutil.rmtree(DATA, ignore_errors=True)
+    os.makedirs(DATA)
+    expired_row_survives_other_mints()
     inst = Instance()
     try:
         run(inst)

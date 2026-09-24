@@ -15,6 +15,10 @@ import secrets
 import time
 
 
+# Longer than the OAuth refresh-token lifetime (30 days): see mint_token's prune.
+_PRUNE_GRACE_S = 31 * 86400
+
+
 class UserService:
     # #309: trimmed, 1-60 chars, display-only (no uniqueness claim). 60 keeps a name from wrapping
     # the .acct-row-value column (max-width:220px) or the comment-thread .gwho onto a second line at
@@ -255,8 +259,10 @@ class UserService:
         secret = secrets.token_urlsafe(32)
         now = time.time()
         data = self._load()
-        # Expired rows can never resolve again; dropping them here keeps the file bounded.
-        data["tokens"] = {k: r for k, r in data["tokens"].items() if not self._expired(r, now)}
+        # Expired rows never resolve, but an OAuth refresh reads a row's PRESENCE as "not revoked"
+        # (hosted/oauth.py), so a row is only dropped once it is past any refresh token's lifetime.
+        data["tokens"] = {k: r for k, r in data["tokens"].items()
+                          if not self._expired(r, now - _PRUNE_GRACE_S)}
         rec = {"uid": uid, "hash": self._digest(secret), "label": label or "", "created": now}
         if ttl_s:
             rec["expires"] = now + ttl_s

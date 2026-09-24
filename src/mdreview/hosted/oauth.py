@@ -196,7 +196,8 @@ class OAuthModule:
         nonce = form.get("nonce", "")
         cookie_nonce = self._cookie(h, CONSENT_COOKIE)
         p = h._principal()
-        if not nonce or not hmac.compare_digest(nonce, cookie_nonce) or p.is_anonymous:
+        if not nonce or p.is_anonymous \
+                or not hmac.compare_digest(nonce.encode("utf-8"), cookie_nonce.encode("utf-8")):
             return self._page(h, 403, "Cannot sign in", "<h1>This approval could not be verified</h1>"
                               "<p>Start the connection again from the application.</p>")
         pending = self.db.take_pending(nonce)
@@ -228,7 +229,7 @@ class OAuthModule:
     def _code_grant(self, h, form):
         row = self.db.take_code(form.get("code", ""))
         if not row or row["client_id"] != form.get("client_id") \
-                or row["redirect_uri"] != form.get("redirect_uri") \
+                or (form.get("redirect_uri") and row["redirect_uri"] != form["redirect_uri"]) \
                 or (form.get("resource") and canonical_resource(form["resource"]) != row["resource"]) \
                 or not pkce_ok(form.get("code_verifier", ""), row["challenge"]):
             return self._json(h, 400, {"error": "invalid_grant"})
