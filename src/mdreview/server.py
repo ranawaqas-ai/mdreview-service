@@ -64,6 +64,7 @@ from mdreview.assets import AssetService
 from mdreview.reviews import ReviewService
 from mdreview.handoff import HandoffService
 from mdreview.users import UserService
+from mdreview.mcp_endpoint import McpModule
 
 # A document's human-facing + raw-content read routes carry X-Robots-Tag: noindex so that a PUBLIC
 # document (#101) means "anyone I hand the link to", NOT "search-engine indexed". Emitted
@@ -99,7 +100,7 @@ class Services:
         # Opt-in feature modules (MR-092). Each entry handles requests via H.route's dispatch
         # loop. Flag off: empty list, no import, byte-identical behavior. Flag on without the
         # package installed fails loud at boot: a misconfiguration must never boot half-enabled.
-        self.modules = []
+        self.modules = [McpModule()]      # POST /mcp, the remote MCP transport (#395)
         if ENABLE_LATEX:
             import latex_review
             module, self.reviews = latex_review.build(

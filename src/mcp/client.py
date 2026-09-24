@@ -32,50 +32,82 @@ class ToolError(Exception):
     """A tool ran and failed (bad id, service down, non-2xx) -> isError result, not a protocol error."""
 
 
-def _request(method, path, body=None):
-    """(body_text, response_headers) — the raw exchange. http() keeps the text-only contract every
-    existing caller has; the headers exist for get_source_with_revision, which needs the ETag from
-    the SAME response as the body (#288)."""
-    url = BASE + path
-    data = json.dumps(body).encode("utf-8") if body is not None else None
-    req = urllib.request.Request(url, data=data, method=method)
-    if data is not None:
-        req.add_header("Content-Type", "application/json")
-    if TOKEN:
-        req.add_header("Authorization", "Bearer " + TOKEN)
-    try:
-        with _opener.open(req, timeout=30) as r:
-            return r.read().decode("utf-8"), r.headers
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", "replace")
-        raise ToolError("HTTP %s from %s %s: %s" % (e.code, method, path, detail))
-    except urllib.error.URLError as e:
-        raise ToolError("cannot reach mdreview at %s (%s)" % (BASE, e.reason))
+class ServiceClient:
+    """One mdreview service, reached over HTTP as one caller.
+
+    The stdio wrapper builds one from MDREVIEW_BASE/MDREVIEW_TOKEN. The service's own /mcp endpoint
+    (#395) builds one per request against itself on loopback, carrying the caller's Bearer, and sets
+    local_files=False because there `attach_asset(path=...)` would read the SERVER's disk."""
+
+    def __init__(self, base, token="", local_files=True, host=None):
+        self.base = base.rstrip("/")
+        self.token = token
+        self.local_files = local_files
+        self.host = host      # the /mcp caller's Host, so URLs the service builds point back at it
+
+    def request(self, method, path, body=None):
+        """(body_text, response_headers) — the raw exchange. The headers exist for
+        get_source_with_revision, which needs the ETag from the SAME response as the body (#288)."""
+        url = self.base + path
+        data = json.dumps(body).encode("utf-8") if body is not None else None
+        req = urllib.request.Request(url, data=data, method=method)
+        if data is not None:
+            req.add_header("Content-Type", "application/json")
+        if self.token:
+            req.add_header("Authorization", "Bearer " + self.token)
+        if self.host:
+            req.add_header("Host", self.host)
+        try:
+            with _opener.open(req, timeout=30) as r:
+                return r.read().decode("utf-8"), r.headers
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")
+            raise ToolError("HTTP %s from %s %s: %s" % (e.code, method, path, detail))
+        except urllib.error.URLError as e:
+            raise ToolError("cannot reach mdreview at %s (%s)" % (self.base, e.reason))
+
+    def get_source_with_revision(self, review_id):
+        """The opt-in get_source envelope (#288): {"source": <raw document>, "revision": N}.
+
+        The revision comes from the ETag of the SAME GET /source response as the body — one read, one
+        token, so a concurrent write can never leave the caller holding old text with a new token. The
+        default get_source result stays the raw document verbatim; this envelope exists only behind the
+        explicit with_revision flag (a default-on envelope would break every existing caller).
+        revision is null against a pre-#288 server that sends no ETag."""
+        text, headers = self.request("GET", "/api/reviews/%s/source" % review_id, None)
+        etag = (headers.get("ETag") or "").strip().strip('"')
+        try:
+            revision = int(etag)
+        except ValueError:
+            revision = None
+        return json.dumps({"source": text, "revision": revision})
+
+    def call_tool(self, name, args):
+        """Run one HTTP-backed tool; the result text. KeyError = missing required arg; ToolError = the
+        tool ran and failed."""
+        method, path, body = route(name, args, self.local_files)
+        if name == "get_source" and args.get("with_revision"):
+            return self.get_source_with_revision(args["id"])
+        return self.request(method, path, body)[0]
+
+
+# Module-level forms for the stdio wrapper and the tests. They read BASE/TOKEN at call time, so a
+# caller that repoints client.BASE (tests/revision_precondition_selfcheck.py) keeps working.
+def _default():
+    return ServiceClient(BASE, TOKEN)
 
 
 def http(method, path, body=None):
-    return _request(method, path, body)[0]
+    return _default().request(method, path, body)[0]
 
 
 def get_source_with_revision(review_id):
-    """The opt-in get_source envelope (#288): {"source": <raw document>, "revision": N}.
-
-    The revision comes from the ETag of the SAME GET /source response as the body — one read, one
-    token, so a concurrent write can never leave the caller holding old text with a new token. The
-    default get_source result stays the raw document verbatim; this envelope exists only behind the
-    explicit with_revision flag (a default-on envelope would break every existing caller).
-    revision is null against a pre-#288 server that sends no ETag."""
-    text, headers = _request("GET", "/api/reviews/%s/source" % review_id, None)
-    etag = (headers.get("ETag") or "").strip().strip('"')
-    try:
-        revision = int(etag)
-    except ValueError:
-        revision = None
-    return json.dumps({"source": text, "revision": revision})
+    return _default().get_source_with_revision(review_id)
 
 
-def route(name, args):
-    """Map a tool name + args onto (http_method, path, body). KeyError -> missing required arg."""
+def route(name, args, local_files=True):
+    """Map a tool name + args onto (http_method, path, body). KeyError -> missing required arg.
+    local_files=False (the remote /mcp endpoint) refuses attach_asset's `path`, which reads a file."""
     if name == "create_review":
         body = {k: args[k] for k in ("markdown", "title", "project", "session", "source_path", "kind", "template") if k in args}
         body.setdefault("markdown", args["markdown"])  # KeyError if absent -> -32602
@@ -109,6 +141,9 @@ def route(name, args):
     if name == "attach_asset":
         b64 = args.get("content_b64")
         if not b64 and args.get("path"):
+            if not local_files:
+                raise ToolError("attach_asset over the remote endpoint needs `content_b64`: `path` "
+                                "names a file on your machine, which this server cannot read")
             # read + encode locally so the bytes never pass through the agent's context
             try:
                 with open(os.path.expanduser(args["path"]), "rb") as f:

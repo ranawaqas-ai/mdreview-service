@@ -125,3 +125,10 @@ jobs:
       # clients use the hints to decide which calls need the user's confirmation.
       - name: Tool annotations selfcheck
         run: python3 tests/tool_annotations_selfcheck.py
+
+      # #395: POST /mcp, the remote MCP transport. Boots a local and a hosted instance and checks the
+      # Streamable HTTP rules (202/405/400/403), the 401 + resource_metadata an OAuth client starts
+      # from, per-user isolation through /mcp, token revocation, and that attach_asset's `path`
+      # never reads the server's disk. Stdlib-only.
+      - name: MCP HTTP transport selfcheck
+        run: python3 tests/mcp_http_selfcheck.py
