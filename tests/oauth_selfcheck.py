@@ -11,8 +11,8 @@ Boots a throwaway hosted instance (stub email; the magic link is read from the s
 
 Mutation checks: prune expired rows in UserService.mint_token with no grace and the idle-connector
 case fails; make pkce_ok return True and the wrong-verifier case fails; make redirect_allowed
-return True and the foreign-redirect case fails; drop the cookie-nonce comparison in _consent and
-the forged-consent case fails.
+return True and the foreign-redirect case fails; drop the _same_origin check in _consent and the
+cross-site consent case fails.
 
 Run: python3 tests/oauth_selfcheck.py     (exit 0 = pass)
 """
@@ -136,15 +136,16 @@ def authorize_url(inst, client_id, challenge, redirect=CALLBACK, resource=PUBLIC
 
 
 def consent(inst, session, client_id, challenge, **kw):
-    """GET the consent page as `session`; returns (nonce, consent cookie)."""
+    """GET the consent page as `session`; returns (nonce, status, headers)."""
     code, hdrs, raw = req(authorize_url(inst, client_id, challenge, **kw), headers={"Cookie": session})
     m = re.search(rb"name=nonce value='([^']+)'", raw)
-    return (m.group(1).decode() if m else ""), cookies_of(hdrs).get("mdr_oauth_consent", ""), code, hdrs
+    return (m.group(1).decode() if m else ""), code, hdrs
 
 
-def approve(inst, session, nonce, cookie_nonce, decision="approve"):
-    cookie = session + ("; mdr_oauth_consent=" + cookie_nonce if cookie_nonce else "")
-    return form(inst.base + "/oauth/authorize", {"nonce": nonce, "decision": decision}, {"Cookie": cookie})
+def approve(inst, session, nonce, decision="approve", origin=PUBLIC):
+    """The browser's form post: same-origin unless `origin` says otherwise."""
+    return form(inst.base + "/oauth/authorize", {"nonce": nonce, "decision": decision},
+                {"Cookie": session, "Origin": origin})
 
 
 def expired_row_survives_other_mints():
@@ -233,21 +234,22 @@ def run(inst):
     check("sign-in ignores a return cookie that is not /oauth/authorize (no open redirect)", landed_evil == "/", landed_evil)
 
     # ---- consent ----
-    nonce, cnonce, code, hdrs = consent(inst, session_a, client_id, challenge)
+    nonce, code, hdrs = consent(inst, session_a, client_id, challenge)
     check("consent page for a signed-in user, framing refused",
-          code == 200 and nonce and cnonce == nonce
+          code == 200 and nonce
           and "frame-ancestors 'none'" in (hdrs.get("Content-Security-Policy") or ""), code)
-    code, _, _ = approve(inst, session_a, nonce, "")
-    check("consent POST without the nonce cookie (a cross-site form) -> 403", code == 403, code)
+    code, _, _ = approve(inst, session_a, nonce, origin="https://evil.example")
+    check("consent POST from another site's page (Origin) -> 403", code == 403, code)
     session_b, _ = inst.login("b@e.com")
-    code, _, _ = approve(inst, session_b, nonce, cnonce)
+    code, _, _ = approve(inst, session_b, nonce)
     check("consent POST from a different user -> 403", code == 403, code)
-    # the pending row was not spent by the refusals above only if uid matched; get a fresh one
-    nonce, cnonce, _, _ = consent(inst, session_a, client_id, challenge)
-    code, hdrs, _ = approve(inst, session_a, nonce, cnonce)
+    # two consent pages open (a retried popup, an old tab): Allow on the OLDER one must still work
+    older, _, _ = consent(inst, session_a, client_id, challenge)
+    consent(inst, session_a, client_id, challenge)
+    code, hdrs, _ = approve(inst, session_a, older)
     loc = urlparse(hdrs.get("Location", ""))
     q = {k: v[0] for k, v in parse_qs(loc.query).items()}
-    check("approve -> 302 to the registered callback with code and state",
+    check("with two consent pages open, Allow on the older one -> 302 with code and state",
           code == 302 and hdrs.get("Location", "").startswith(CALLBACK) and q.get("code") and q.get("state") == "st8",
           hdrs.get("Location"))
     code_ = q.get("code", "")
@@ -261,8 +263,8 @@ def run(inst):
     code, _, raw = form(tok_url, dict(base_fields, code_verifier=verifier))
     check("token: the code was burned by the failed attempt (single use)", code == 400, code)
 
-    nonce, cnonce, _, _ = consent(inst, session_a, client_id, challenge)
-    _, hdrs, _ = approve(inst, session_a, nonce, cnonce)
+    nonce, _, _ = consent(inst, session_a, client_id, challenge)
+    _, hdrs, _ = approve(inst, session_a, nonce)
     code_ = parse_qs(urlparse(hdrs["Location"]).query)["code"][0]
     base_fields["code"] = code_
     code, hdrs, raw = form(tok_url, dict(base_fields, code_verifier=verifier))
@@ -310,8 +312,8 @@ def run(inst):
     check("...and the refresh token is dead too", code == 400, code)
 
     # ---- deny ----
-    nonce, cnonce, _, _ = consent(inst, session_a, client_id, challenge)
-    code, hdrs, _ = approve(inst, session_a, nonce, cnonce, decision="deny")
+    nonce, _, _ = consent(inst, session_a, client_id, challenge)
+    code, hdrs, _ = approve(inst, session_a, nonce, decision="deny")
     check("deny -> 302 with error=access_denied", code == 302 and "error=access_denied" in hdrs.get("Location", ""), code)
 
 
