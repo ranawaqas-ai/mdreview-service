@@ -113,3 +113,9 @@ jobs:
       # nothing in web/app/** (see the file header), so that check is run by hand each PR.
       - name: Share scope selfcheck
         run: python3 tests/share_scope_selfcheck.py
+
+      # #393: the Claude Code plugin + marketplace manifests. The plugin's wrapper is symlinks into
+      # src/, so this catches a stale real copy, a missing manifest field, or a copied install that
+      # no longer starts. `claude plugin validate` is stricter but needs the CLI; run it by hand.
+      - name: Plugin manifest selfcheck
+        run: python3 tests/plugin_manifest_selfcheck.py

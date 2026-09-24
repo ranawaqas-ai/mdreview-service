@@ -30,6 +30,11 @@ prompted for it instead. Access is **invite-only** (an email allowlist), so this
 instance owner has added your Google email; otherwise ask for an invite, or self-host below. (To
 wire it up by hand, or for a non-Claude-Code MCP client, see [MCP server](#mcp-server-optional).)
 
+Or install it as a Claude Code plugin, with no installer. Inside Claude Code run
+`/plugin marketplace add ranawaqas-ai/mdreview-service`, then `/plugin install mdreview@mdreview`.
+It prompts for the token and keeps it in your keychain. Plugin updates arrive through
+`/plugin update`; the wrapper does not update itself inside a plugin.
+
 **2. Self-hosted (local).** Clone and run it yourself (no account, no auth, on `localhost`). See
 [Run](#run), then point your agent's MCP `MDREVIEW_BASE` at `http://localhost:8137`. This is the
 path for anyone: no invite needed.
