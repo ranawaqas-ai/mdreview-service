@@ -132,3 +132,10 @@ jobs:
       # never reads the server's disk. Stdlib-only.
       - name: MCP HTTP transport selfcheck
         run: python3 tests/mcp_http_selfcheck.py
+
+      # #395: the OAuth server a claude.ai connector signs in through. Walks discovery, DCR,
+      # authorize (incl. sign-in return), consent, token, refresh rotation and /account revocation
+      # on a throwaway hosted instance, then attacks each step (foreign redirect, wrong verifier,
+      # code replay, forged consent, wrong resource, spent refresh). Mutation-checked.
+      - name: OAuth selfcheck
+        run: python3 tests/oauth_selfcheck.py
