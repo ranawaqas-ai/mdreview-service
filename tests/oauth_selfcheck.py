@@ -9,7 +9,8 @@ POST, a wrong resource, a spent refresh token, and a token revoked on /account.
 
 Boots a throwaway hosted instance (stub email; the magic link is read from the server log).
 
-Mutation checks: prune expired rows in UserService.mint_token with no grace and the idle-connector
+Mutation checks: make redirect_allowed parse the hostname again (urlparse) and the backslash and
+CR/LF cases fail; prune expired rows in UserService.mint_token with no grace and the idle-connector
 case fails; make pkce_ok return True and the wrong-verifier case fails; make redirect_allowed
 return True and the foreign-redirect case fails; drop the _same_origin check in _consent and the
 cross-site consent case fails.
@@ -165,6 +166,10 @@ def expired_row_survives_other_mints():
           survived)
     check("...while the expired token itself no longer authenticates",
           users.resolve("Bearer " + idle) is None)
+    with users.store.lock:
+        idle2 = users.mint_token("u:1", "OAuth: Claude", ttl_s=-1)
+    check("an idle connector's expired row is still listed on /account, so it can be revoked",
+          users.token_id(idle2) in [t["tok_id"] for t in users.list_tokens("u:1")])
 
 
 def main():
@@ -205,8 +210,22 @@ def run(inst):
         return code, json.loads(raw)
     code, reg = register(["https://evil.example/cb"])
     check("register: a foreign redirect URI is refused", code == 400 and reg.get("error") == "invalid_redirect_uri", code)
+    code, reg = register(["http://evil.example\\@localhost/cb"])
+    check("register: 'http://evil.example\\@localhost/cb' is refused (browsers go to evil.example)",
+          code == 400, code)
+    code, reg = register(["http://localhost/cb\r\nSet-Cookie: mdr_pwn=1"])
+    check("register: a redirect URI with CR/LF is refused (no header injection)", code == 400, code)
     code, reg = register(["http://127.0.0.1:5555/callback"], "Claude Code")
     check("register: a loopback redirect URI is accepted", code == 201, code)
+    loop_id = reg.get("client_id", "")
+    _, lc = pkce()
+    for bad in ("http://evil.example\\@127.0.0.1:9/callback", "http://127.0.0.1:9/callback#x"):
+        code, hdrs, _ = req(authorize_url(inst, loop_id, lc, redirect=bad))
+        check("authorize: loopback client, redirect %r -> 400 page, no redirect" % bad,
+              code == 400 and not hdrs.get("Location"), code)
+    code, hdrs, _ = req(authorize_url(inst, loop_id, lc, redirect="http://127.0.0.1:7777/callback"))
+    check("authorize: the same loopback path on another port is accepted", code in (200, 302)
+          and "error=" not in (hdrs.get("Location") or ""), code)
     code, reg = register([CALLBACK])
     client_id = reg.get("client_id", "")
     check("register: the claude.ai callback -> 201 with a public client_id",
@@ -310,6 +329,15 @@ def run(inst):
     code, _, _ = form(tok_url, {"grant_type": "refresh_token", "refresh_token": new["refresh_token"],
                                 "client_id": client_id})
     check("...and the refresh token is dead too", code == 400, code)
+
+    # ---- a registration flood evicts old unused clients instead of locking out new ones ----
+    for i in range(1001):
+        req(b + "/oauth/register", "POST", json.dumps({"redirect_uris": [CALLBACK]}).encode(),
+            {"Content-Type": "application/json"})
+    code, reg = register([CALLBACK])
+    check("after 1001 junk registrations, a real one still gets 201", code == 201, code)
+    check("...and the client that completed a grant was not evicted",
+          req(authorize_url(inst, client_id, challenge), headers={"Cookie": session_a})[0] == 200)
 
     # ---- deny ----
     nonce, _, _ = consent(inst, session_a, client_id, challenge)

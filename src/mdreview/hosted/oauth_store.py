@@ -16,7 +16,7 @@ import sqlite3
 import time
 
 UNUSED_CLIENT_TTL_S = 3600      # a registration never used for a grant is pruned after this
-MAX_UNUSED_CLIENTS = 1000       # past this, registration refuses until pruning frees room
+MAX_UNUSED_CLIENTS = 1000       # past this, the oldest unused registration is evicted
 
 
 def digest(value):
@@ -76,13 +76,15 @@ class OAuthStore:
 
     # ---- clients (dynamic registration) ----
     def register_client(self, client_name, redirect_uris):
-        """A new client_id, or None when too many unused registrations are live."""
+        """A new client_id. Past the cap, the OLDEST unused registration is evicted rather than the
+        new one refused, so a registration flood cannot lock real connectors out; a client that has
+        completed a grant (used=1) is never evicted."""
         now = time.time()
         with self._connect() as conn:
             conn.execute("DELETE FROM clients WHERE used=0 AND created < ?", (now - UNUSED_CLIENT_TTL_S,))
-            unused = conn.execute("SELECT COUNT(*) AS n FROM clients WHERE used=0").fetchone()["n"]
-            if unused >= MAX_UNUSED_CLIENTS:
-                return None
+            conn.execute("DELETE FROM clients WHERE client_id IN (SELECT client_id FROM clients "
+                         "WHERE used=0 ORDER BY created DESC LIMIT -1 OFFSET ?)",
+                         (MAX_UNUSED_CLIENTS - 1,))
             client_id = "mdrc_" + secrets.token_urlsafe(16)
             conn.execute("INSERT INTO clients (client_id, client_name, redirect_uris, created) "
                          "VALUES (?, ?, ?, ?)", (client_id, client_name, json.dumps(redirect_uris), now))
