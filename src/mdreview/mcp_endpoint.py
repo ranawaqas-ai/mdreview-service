@@ -57,7 +57,8 @@ class McpModule:
             return True
 
         client = ServiceClient("http://127.0.0.1:%d" % h.server.server_address[1], bearer,
-                               local_files=False, host=h.headers.get("Host"))
+                               local_files=False, host=h.headers.get("Host"),
+                               client_ip=h.headers.get("X-Real-IP") or h.client_address[0])
         try:
             resp = rpc.handle(msg, client)
         except Exception as e:             # one bad message never becomes a 500 page

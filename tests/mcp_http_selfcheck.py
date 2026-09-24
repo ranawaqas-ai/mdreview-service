@@ -127,6 +127,9 @@ def local_tier():
         check("local: create_review works with no auth, review_url on the caller's host",
               code == 200 and url.startswith(base + "/review/"), url or text[:120])
         rid = json.loads(text).get("id", "") if not err else ""
+        code, err, text = call(base, "get_review", {"id": "x?y=1"})
+        check("local: an id with '?' stays one path segment (no query smuggling)",
+              err is True and "x%3Fy%3D1" in text, text[:120])
         code, err, text = call(base, "attach_asset", {"id": rid, "name": "x.txt", "path": "/etc/hosts"})
         check("local: attach_asset(path) is refused, the server's disk is never read",
               err is True and "content_b64" in text, text[:120])
