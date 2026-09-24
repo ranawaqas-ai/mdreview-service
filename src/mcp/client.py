@@ -39,10 +39,11 @@ class ServiceClient:
     (#395) builds one per request against itself on loopback, carrying the caller's Bearer, and sets
     local_files=False because there `attach_asset(path=...)` would read the SERVER's disk."""
 
-    def __init__(self, base, token="", local_files=True):
+    def __init__(self, base, token="", local_files=True, host=None):
         self.base = base.rstrip("/")
         self.token = token
         self.local_files = local_files
+        self.host = host      # the /mcp caller's Host, so URLs the service builds point back at it
 
     def request(self, method, path, body=None):
         """(body_text, response_headers) — the raw exchange. The headers exist for
@@ -54,6 +55,8 @@ class ServiceClient:
             req.add_header("Content-Type", "application/json")
         if self.token:
             req.add_header("Authorization", "Bearer " + self.token)
+        if self.host:
+            req.add_header("Host", self.host)
         try:
             with _opener.open(req, timeout=30) as r:
                 return r.read().decode("utf-8"), r.headers
