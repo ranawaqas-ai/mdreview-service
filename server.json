@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.ranawaqas-ai/mdreview",
+  "title": "mdreview",
+  "description": "Human-in-the-loop document review: an agent pushes a draft, a person comments, the agent revises.",
+  "version": "0.6.0",
+  "websiteUrl": "https://mdreview.space",
+  "repository": {
+    "url": "https://github.com/ranawaqas-ai/mdreview-service",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://app.mdreview.space/mcp"
+    }
+  ]
+}
