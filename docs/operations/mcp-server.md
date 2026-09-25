@@ -51,6 +51,20 @@ plugin becomes installable once it reaches `main`.
 Checks: `tests/plugin_manifest_selfcheck.py` runs in pr-checks. `claude plugin validate . --strict` and
 `claude plugin validate plugins/mdreview --strict` need the CLI, so run them by hand when a manifest changes.
 
+## MCP Registry
+
+`server.json` at the repo root is the entry in the official MCP Registry
+(https://registry.modelcontextprotocol.io), published as `io.github.ranawaqas-ai/mdreview` and
+pointing at the remote endpoint `https://app.mdreview.space/mcp`. To republish after a release that
+changes the remote surface, bump `version`, then:
+
+```bash
+mcp-publisher validate
+mcp-publisher login github --token "$(gh auth token)"   # gh must be signed in as ranawaqas-ai
+mcp-publisher publish
+mcp-publisher logout
+```
+
 ## Developing mdreview-service itself
 
 The "point `args` at your checkout" advice above is for *using* the service, where you aren't
