@@ -6,8 +6,8 @@
 # It asks how you want to run mdreview:
 #   Local   - run it yourself, open to everyone, no account. Starts a server on localhost:8137
 #             and wires Claude Code to it. No Docker.
-#   Hosted  - connect Claude Code to the managed instance at app.mdreview.space (early access;
-#             needs an invite + a token minted at "Connect your agent").
+#   Hosted  - connect Claude Code to the managed instance at app.mdreview.space (sign in with any
+#             email; needs a token minted on the Account page).
 #
 # Non-interactive: set MDREVIEW_MODE=local|hosted (and MDREVIEW_TOKEN=mdr_... for hosted).
 set -eu
@@ -35,7 +35,7 @@ if [ -z "$MODE" ]; then
   if ( : < /dev/tty ) 2>/dev/null; then
     say "How do you want to run mdreview?"
     say "  1) Local   run it yourself, open to everyone, no account (a server on localhost:$PORT)"
-    say "  2) Hosted  connect to $HOSTED (early access, needs an invite + token)"
+    say "  2) Hosted  connect to $HOSTED (sign in with any email, needs a token)"
     printf 'Choose [1/2]: ' > /dev/tty
     IFS= read -r ans < /dev/tty 2>/dev/null || ans=""
     case "$ans" in
@@ -97,7 +97,7 @@ if [ "$MODE" = "local" ]; then
 else
   TOKEN="${MDREVIEW_TOKEN:-}"
   if [ -z "$TOKEN" ] && ( : < /dev/tty ) 2>/dev/null; then
-    printf 'Paste your token from %s ("Connect your agent"): ' "$HOSTED" > /dev/tty
+    printf 'Paste your token from %s (Account page): ' "$HOSTED" > /dev/tty
     stty -echo < /dev/tty 2>/dev/null || true
     IFS= read -r TOKEN < /dev/tty 2>/dev/null || TOKEN=""
     stty echo < /dev/tty 2>/dev/null || true
