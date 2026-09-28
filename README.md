@@ -123,3 +123,7 @@ The runbooks that used to live here, moved out so this page stays readable:
 ## License
 
 [Apache License 2.0](LICENSE).
+
+## Privacy Policy
+
+The hosted service at app.mdreview.space stores your account email, your reviews and comments, and sign-in security records. It uses no analytics or tracking cookies, does not sell your data and does not use it to train AI models. The full policy, including retention, deletion and third-party services, is at <https://mdreview.space/privacy/>. Questions go to rana.waqas.works@gmail.com. A self-hosted instance keeps all data on your machine.
