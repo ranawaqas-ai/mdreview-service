@@ -76,10 +76,32 @@ def check_plugin(plugin_dir, fails):
         fails.append("MDREVIEW_TOKEN must come from a userConfig option marked sensitive "
                      "(stored in the keychain, never in settings.json)")
 
+    check_listing_files(plugin_dir, p, fails)
+
     for name, target in LINKS.items():
         link = plugin_dir / name
         if not link.is_symlink() or link.resolve() != target.resolve():
             fails.append(f"plugins/mdreview/{name} must be a symlink to {target.relative_to(ROOT)}")
+
+
+def check_listing_files(plugin_dir, manifest, fails):
+    """What Anthropic's plugin directory blocks on (docs: plugins/pre-submission-checklist)."""
+    readme = plugin_dir / "README.md"
+    if not readme.is_file():
+        fails.append("plugins/mdreview/README.md is missing (the directory blocks without one)")
+    else:
+        prose = re.sub(r"```.*?```", "", readme.read_text(), flags=re.S)
+        if len(prose.split()) < 40:
+            fails.append("plugins/mdreview/README.md needs 40+ words outside code blocks")
+    if not manifest.get("license") and not (plugin_dir / "LICENSE").is_file():
+        fails.append("plugin.json needs a license field or the plugin folder a LICENSE file")
+    for field in ("description", "author", "version"):
+        if not manifest.get(field):
+            fails.append(f"plugin.json needs {field} (the directory warns without it)")
+    junk = {".DS_Store", "Thumbs.db", "desktop.ini", "__MACOSX"}
+    for path in plugin_dir.rglob("*"):
+        if path.name in junk:
+            fails.append(f"remove {path.relative_to(ROOT)} (the directory blocks system files)")
 
 
 def check_installed_copy_runs(plugin_dir, fails):
