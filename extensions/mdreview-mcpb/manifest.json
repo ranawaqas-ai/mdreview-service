@@ -1,0 +1,90 @@
+{
+  "manifest_version": "0.3",
+  "name": "mdreview",
+  "display_name": "mdreview",
+  "version": "0.6.0",
+  "description": "Human-in-the-loop document review for agents. Push a markdown or LaTeX draft, a person comments in the browser, and Claude reads the comments and revises.",
+  "long_description": "mdreview lets Claude hand a draft to a person and get structured feedback back. Claude creates a review from markdown (or LaTeX) and returns a link. The reviewer opens it in the browser and leaves comments anchored to specific phrases. Claude reads the open comments, applies the edits, replies to or resolves each thread, and hands the turn back. Reviews live on https://app.mdreview.space and need an mdreview agent token from your account page.",
+  "author": {
+    "name": "Rana Waqas",
+    "url": "https://mdreview.space"
+  },
+  "homepage": "https://mdreview.space",
+  "documentation": "https://mdreview.space",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ranawaqas-ai/mdreview-service"
+  },
+  "support": "https://github.com/ranawaqas-ai/mdreview-service/issues",
+  "license": "Apache-2.0",
+  "keywords": ["review", "markdown", "latex", "human-in-the-loop", "comments"],
+  "icon": "icon.png",
+  "privacy_policies": ["https://mdreview.space/privacy/"],
+  "server": {
+    "type": "python",
+    "entry_point": "server/mcp_server.py",
+    "mcp_config": {
+      "command": "python3",
+      "args": ["${__dirname}/server/mcp_server.py"],
+      "env": {
+        "MDREVIEW_BASE": "https://app.mdreview.space",
+        "MDREVIEW_TOKEN": "${user_config.token}",
+        "MDREVIEW_NO_AUTO_UPDATE": "1"
+      }
+    }
+  },
+  "user_config": {
+    "token": {
+      "type": "string",
+      "title": "mdreview agent token",
+      "description": "An mdr_ token from https://app.mdreview.space/account (Agent tokens).",
+      "sensitive": true,
+      "required": true
+    }
+  },
+  "tools": [
+    { "name": "create_review", "description": "Create a review from markdown or LaTeX and get the review link." },
+    { "name": "list_reviews", "description": "List your reviews with status, comment counts and revision." },
+    { "name": "get_review", "description": "Get one review's metadata." },
+    { "name": "get_source", "description": "Read a review's current draft." },
+    { "name": "get_feedback", "description": "Read the reviewer's notes and comments on a review." },
+    { "name": "get_status", "description": "Cheap poll for changes to a review's source, feedback and comments." },
+    { "name": "update_source", "description": "Push a revised draft; the reviewer's page reloads." },
+    { "name": "get_history", "description": "List a review's past rounds, or fetch one past draft with its feedback." },
+    { "name": "get_git_url", "description": "Get a git clone URL with one commit per review round." },
+    { "name": "delete_review", "description": "Delete a review and its data." },
+    { "name": "attach_asset", "description": "Attach an image so the viewer renders it in the draft." },
+    { "name": "list_assets", "description": "List the images attached to a review." },
+    { "name": "create_comment", "description": "Leave a comment anchored to a quoted phrase in the draft." },
+    { "name": "list_comments", "description": "List comment threads, optionally only the open ones." },
+    { "name": "get_comment", "description": "Read one comment thread with all replies and status history." },
+    { "name": "reply_to_comment", "description": "Reply to a comment without resolving it." },
+    { "name": "resolve_comment", "description": "Mark a comment resolved once it has been addressed." },
+    { "name": "delete_comment", "description": "Permanently delete a comment and its thread." },
+    { "name": "hand_back", "description": "Hand the turn back to the reviewer after acting on feedback." },
+    { "name": "ping_working", "description": "Renew your claim on a review while you work on it." },
+    { "name": "server_info", "description": "Report the running server's name, version and tool list." }
+  ],
+  "prompts": [
+    {
+      "name": "review-draft",
+      "description": "Send a draft to a person for review in the browser.",
+      "arguments": ["topic"],
+      "text": "Write a first draft about ${arguments.topic}, create an mdreview review from it, and give me the review link so I can comment."
+    },
+    {
+      "name": "apply-feedback",
+      "description": "Read the open comments on a review and revise the draft.",
+      "text": "Check my mdreview reviews for open comments, apply the requested edits with update_source, reply to or resolve each comment, and hand the review back."
+    },
+    {
+      "name": "review-status",
+      "description": "See which reviews are waiting on you or on the reviewer.",
+      "text": "List my mdreview reviews and tell me which ones have new feedback for you to act on."
+    }
+  ],
+  "compatibility": {
+    "platforms": ["darwin"],
+    "runtimes": { "python": ">=3.8" }
+  }
+}
