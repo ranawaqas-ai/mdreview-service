@@ -1,6 +1,6 @@
 {
   "name": "mdreview",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Human-in-the-loop document review for agents: push a markdown or LaTeX draft, a person comments in the browser, the agent reads the comments and revises.",
   "author": { "name": "Rana Waqas", "url": "https://mdreview.space" },
   "homepage": "https://mdreview.space",
