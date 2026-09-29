@@ -37,8 +37,11 @@ ALLOWED_REDIRECTS = ("https://claude.ai/api/mcp/auth_callback",
                      "https://claude.com/api/mcp/auth_callback")
 # One whole-string match, never a parsed hostname: urlparse and browsers disagree on inputs such as
 # "http://evil.example\@localhost/cb" (Python sees localhost, a browser goes to evil.example), and
-# urlsplit silently drops CR/LF that would otherwise reach a Location header.
-_LOOPBACK = re.compile(r"http://(localhost|127\.0\.0\.1)(?::\d{1,5})?(/[A-Za-z0-9._~%/-]*)?")
+# urlsplit silently drops CR/LF that would otherwise reach a Location header. The path class is
+# ASCII only with no backslash, "@", "?" or "#"; "_" is allowed (Goose's /oauth_callback). The
+# port is ASCII digits only (Python's \d also matches other scripts) and at most 65535.
+_PORT = r"(?:[0-9]{1,4}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])"
+_LOOPBACK = re.compile(r"http://(localhost|127\.0\.0\.1)(?::" + _PORT + r")?(/[A-Za-z0-9._~%/_-]*)?")
 MAX_REDIRECT_URIS = 10
 
 ACCESS_TTL_S = 3600
@@ -135,10 +138,14 @@ class OAuthModule:
                 or not all(isinstance(u, str) and len(u) <= 2048 for u in uris):
             return self._json(h, 400, {"error": "invalid_redirect_uri",
                                        "error_description": "redirect_uris must be 1-%d URIs" % MAX_REDIRECT_URIS})
-        bad = [u for u in uris if not redirect_allowed(u)]
-        if bad:
+        # Malformed input (above) rejects the whole request. A well-formed URI that is merely off the
+        # allowlist is dropped, because clients such as Cursor and VS Code register several at once
+        # (RFC 7591 3.2.1 lets the server replace requested values). Only the kept URIs are stored and
+        # echoed, so a dropped one can never be used at authorize.
+        uris = [u for u in uris if redirect_allowed(u)]
+        if not uris:
             return self._json(h, 400, {"error": "invalid_redirect_uri",
-                                       "error_description": "redirect URI not allowed: %r" % bad[0][:200]})
+                                       "error_description": "none of the redirect URIs is allowed"})
         name = str(body.get("client_name") or "MCP client")[:80]
         client_id = self.db.register_client(name, uris)
         return self._json(h, 201, {"client_id": client_id, "client_name": name, "redirect_uris": uris,

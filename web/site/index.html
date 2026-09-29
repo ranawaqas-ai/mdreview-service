@@ -105,7 +105,7 @@
             </div>
             <button class="copybtn" onclick="copyCmd(this)" style="flex:0 0 auto;border:none;border-left:1px solid var(--cmd-border);background:transparent;color:var(--cmd-text);font:600 13px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:0 18px;cursor:pointer;min-width:78px">Copy</button>
           </div>
-          <p style="color:var(--muted2);font-size:13.5px;margin-top:12px">One command. It asks how you want to run it — local or hosted.</p>
+          <p style="color:var(--muted2);font-size:13.5px;margin-top:12px">One command. It asks how you want to run it, local or hosted. On claude.ai instead? <a href="#add" style="color:var(--accent);font-weight:500">Add the connector</a>.</p>
         </div>
       </div>
 
@@ -231,6 +231,42 @@
       </a>
     </section>
 
+    <!-- ADD TO YOUR AGENT -->
+    <section id="add" style="max-width:1000px;margin:0 auto;padding:70px 24px 20px;scroll-margin-top:72px">
+      <div style="text-align:center;margin-bottom:34px">
+        <p style="font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)">Get started</p>
+        <h2 data-h2 style="font-size:30px;line-height:1.2;letter-spacing:-.02em;font-weight:700;margin-top:8px">Add mdreview to your agent</h2>
+        <p style="color:var(--muted);font-size:16px;max-width:54ch;margin:12px auto 0">Sign in with any email address. There is no invite list. Pick the route that matches your agent.</p>
+      </div>
+      <div style="display:grid;gap:18px">
+        <div style="background:var(--panel);border:1px solid var(--rule);border-radius:16px;padding:26px;min-width:0">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <h3 style="font-size:19px;font-weight:680">claude.ai custom connector</h3>
+            <span style="font-size:12px;font-weight:600;letter-spacing:.02em;padding:4px 11px;border-radius:20px;white-space:nowrap;background:var(--accent-weak);color:var(--accent)">No token needed</span>
+          </div>
+          <p style="color:var(--muted);font-size:14.5px;margin-top:12px">Works in claude.ai on the web, Desktop and mobile. In claude.ai open <strong style="color:var(--text);font-weight:600">Settings</strong>, then <strong style="color:var(--text);font-weight:600">Connectors</strong>, then <strong style="color:var(--text);font-weight:600">Add custom connector</strong>, and enter this URL.</p>
+          <div style="display:flex;align-items:stretch;margin-top:14px;background:var(--cmd-bg);border:1px solid var(--cmd-border);border-radius:10px;overflow:hidden">
+            <div style="flex:1 1 auto;min-width:0;padding:12px 14px;overflow-x:auto;font:13.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--cmd-text);white-space:nowrap">https://app.mdreview.space/mcp</div>
+            <button class="copybtn" onclick="copyText(this,'https://app.mdreview.space/mcp')" style="flex:0 0 auto;border:none;border-left:1px solid var(--cmd-border);background:transparent;color:var(--cmd-text);font:600 13px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:0 16px;cursor:pointer">Copy</button>
+          </div>
+          <p style="color:var(--muted);font-size:14.5px;margin-top:14px">Claude opens the mdreview sign-in. Enter your email, follow the one-time link, and approve the connection on the consent page. You can revoke it later on your Account page.</p>
+        </div>
+        <div data-grid2 style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+          <div style="background:var(--panel);border:1px solid var(--rule);border-radius:16px;padding:26px;min-width:0">
+            <h3 style="font-size:19px;font-weight:680">Claude Code plugin</h3>
+            <p style="color:var(--muted);font-size:14.5px;margin-top:12px">Run these two commands inside Claude Code. The plugin asks for a token, which you mint on the Account page after signing in at <a href="https://app.mdreview.space" style="color:var(--accent);font-weight:500">app.mdreview.space</a>.</p>
+            <div style="margin-top:14px;background:var(--cmd-bg);border:1px solid var(--cmd-border);border-radius:10px;padding:12px 14px;overflow-x:auto;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--cmd-text);white-space:pre">/plugin marketplace add ranawaqas-ai/mdreview-service
+/plugin install mdreview@mdreview</div>
+          </div>
+          <div style="background:var(--panel);border:1px solid var(--rule);border-radius:16px;padding:26px;min-width:0">
+            <h3 style="font-size:19px;font-weight:680">Installer</h3>
+            <p style="color:var(--muted);font-size:14.5px;margin-top:12px">Needs <code style="font:13px ui-monospace,Menlo,monospace;background:var(--code);padding:2px 6px;border-radius:5px">python3</code> and the <code style="font:13px ui-monospace,Menlo,monospace;background:var(--code);padding:2px 6px;border-radius:5px">claude</code> CLI. It asks whether to run locally or use the hosted instance, and prompts for a token if you choose hosted.</p>
+            <div style="margin-top:14px;background:var(--cmd-bg);border:1px solid var(--cmd-border);border-radius:10px;padding:12px 14px;overflow-x:auto;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--cmd-text);white-space:pre">curl -fsSL https://mdreview.space/install.sh | sh</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- WAYS TO RUN -->
     <section style="max-width:1000px;margin:0 auto;padding:70px 24px 20px">
       <div style="text-align:center;margin-bottom:34px">
@@ -248,9 +284,9 @@
         <div style="background:var(--panel);border:1px solid var(--rule);border-radius:16px;padding:26px;min-width:0">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
             <h3 style="font-size:19px;font-weight:680">Hosted</h3>
-            <span style="font-size:12px;font-weight:600;letter-spacing:.02em;padding:4px 11px;border-radius:20px;background:var(--panel2);color:var(--muted);border:1px solid var(--rule)">Early access</span>
+            <span style="font-size:12px;font-weight:600;letter-spacing:.02em;padding:4px 11px;border-radius:20px;background:var(--accent-weak);color:var(--accent)">Open to everyone</span>
           </div>
-          <p style="color:var(--muted);font-size:14.5px;margin-top:12px">Connects Claude Code to the managed instance at <a href="https://app.mdreview.space" style="color:var(--accent);font-weight:500">app.mdreview.space</a>. Invite-only in preview — <a href="https://github.com/waqaskhan137/mdreview-service/issues" style="color:var(--accent);font-weight:500">request access</a>.</p>
+          <p style="color:var(--muted);font-size:14.5px;margin-top:12px">Use the managed instance at <a href="https://app.mdreview.space" style="color:var(--accent);font-weight:500">app.mdreview.space</a>. Sign in with any email address; you get a one-time link, no password and no invite.</p>
         </div>
       </div>
     </section>
@@ -269,6 +305,12 @@
 
 </div>
 <script>
+function copyText(btn, text){
+  navigator.clipboard.writeText(text).catch(function(){});
+  btn.textContent = 'Copied';
+  clearTimeout(btn._t);
+  btn._t = setTimeout(function(){ btn.textContent = 'Copy'; }, 1600);
+}
 function copyCmd(btn){
   navigator.clipboard.writeText('curl -fsSL https://mdreview.space/install.sh | sh').catch(function(){});
   btn.textContent = 'Copied';

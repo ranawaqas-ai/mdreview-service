@@ -70,8 +70,8 @@ def main():
           all(t.get("description") and t.get("inputSchema", {}).get("type") == "object" for t in tools))
     # the comment tools must encode the agent workflow in their descriptions (the brief's expectations)
     desc = {t["name"]: t.get("description", "").lower() for t in tools}
-    check("list_comments description says call it FIRST",
-          "first" in desc.get("list_comments", ""))
+    check("the loop instructions start with list_comments(status=open)",
+          'start with list_comments(status="open")' in init.get("instructions", "").lower())
     check("reply_to_comment description says reply WITHOUT resolving",
           "without" in desc.get("reply_to_comment", ""))
     check("resolve_comment description says justification optional + reviewer can reopen",
