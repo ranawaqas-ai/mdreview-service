@@ -31,6 +31,7 @@ import zlib
 from urllib.parse import urlencode
 
 PREFIX = "[Demo] "
+SEED_LABEL = "seed-demo-"
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -68,7 +69,6 @@ class Demo:
         self.key = key
         self.cookie = ""
         self.csrf = ""
-        self.tok_id = ""
         self.bearer = ""
 
     def _need(self, status, want, what, payload=None):
@@ -98,27 +98,30 @@ class Demo:
         return {"Cookie": self.cookie, "X-CSRF-Token": self.csrf}
 
     def mint_token(self):
-        label = "seed-demo-" + secrets.token_hex(4)
+        label = SEED_LABEL + secrets.token_hex(4)
         status, _, out = call(self.base, "POST", "/account/tokens", {"label": label},
                               self._cookie_hdrs())
         self._need(status, (201,), "token mint", out)
         self.bearer = out["token"]
-        status, _, listing = call(self.base, "GET", "/account/tokens", headers=self._cookie_hdrs())
-        self._need(status, (200,), "token list", listing)
-        ids = [t["tok_id"] for t in listing["tokens"] if t["label"] == label]
-        if len(ids) != 1:
-            raise SystemExit("could not find the seed token to revoke later; revoke it on /account")
-        self.tok_id = ids[0]
 
-    def revoke_token(self):
-        if not self.tok_id:
+    def revoke_seed_tokens(self):
+        """Delete every token whose label starts with SEED_LABEL. Listing by label, not by an id
+        remembered from the mint, is what covers an interrupt between the server minting the token
+        and this script seeing the response (and any token orphaned by an earlier killed run)."""
+        status, _, listing = call(self.base, "GET", "/account/tokens", headers=self._cookie_hdrs())
+        if status != 200 or not isinstance(listing, dict):
+            print("WARNING: could not list tokens (HTTP %s); revoke any seed-demo-* token on /account"
+                  % status, file=sys.stderr)
             return
-        status, _, _ = call(self.base, "DELETE", "/account/tokens/" + self.tok_id,
-                            headers=self._cookie_hdrs())
-        if status != 200:
-            print("WARNING: could not revoke the seed token %s (HTTP %s); revoke it on /account"
-                  % (self.tok_id, status), file=sys.stderr)
-        self.tok_id = ""
+        for t in listing.get("tokens", []):
+            if not str(t.get("label", "")).startswith(SEED_LABEL):
+                continue
+            status, _, _ = call(self.base, "DELETE", "/account/tokens/" + t["tok_id"],
+                                headers=self._cookie_hdrs())
+            if status != 200:
+                print("WARNING: could not revoke seed token %s (HTTP %s); revoke it on /account"
+                      % (t["tok_id"], status), file=sys.stderr)
+        self.bearer = ""
 
     def api(self, method, path, body=None, want=(200, 201)):
         status, _, out = call(self.base, method, path, body,
@@ -260,10 +263,18 @@ Attendees: two engineers and a designer (fictional).
 
 
 def load_key(args):
+    """The code exactly as the server has it. Only a file's line terminator is dropped; any other
+    leading or trailing whitespace is an error, because the server refuses to boot on such a key."""
     if args.key_file:
         with open(os.path.expanduser(args.key_file)) as f:
-            return f.read().strip()
-    return os.environ.get("MDREVIEW_DEMO_LOGIN_KEY", "").strip()
+            key = f.read()
+        key = key[:-2] if key.endswith("\r\n") else key[:-1] if key.endswith("\n") else key
+    else:
+        key = os.environ.get("MDREVIEW_DEMO_LOGIN_KEY", "")
+    if key != key.strip():
+        raise SystemExit("the access code has leading or trailing whitespace; the server would "
+                         "refuse to boot with it, so fix the source of the code")
+    return key
 
 
 def main():
@@ -286,7 +297,7 @@ def main():
             demo.seed()
             print("removed %d old sample review(s), created 4" % removed)
     finally:
-        demo.revoke_token()
+        demo.revoke_seed_tokens()
 
 
 if __name__ == "__main__":

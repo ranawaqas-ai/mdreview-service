@@ -173,6 +173,19 @@ def short_key_refuses_boot():
         check("...that does not print the key", short not in out)
     finally:
         inst.stop()
+    for label, bad in (("leading space", " " + KEY), ("trailing newline", KEY + "\n"),
+                       ("trailing space", KEY + " ")):
+        ws = Instance("wskey", key=bad)
+        try:
+            for _ in range(40):
+                if ws.proc.poll() is not None:
+                    break
+                time.sleep(0.25)
+            out = ws.log_text()
+            check("a key with %s refuses to boot, naming the variable, without printing it" % label,
+                  ws.proc.poll() not in (None, 0) and "MDREVIEW_DEMO_LOGIN_KEY" in out and KEY not in out)
+        finally:
+            ws.stop()
     edge = Instance("edgekey", key="e" * 32)
     try:
         check("a 32-character key boots and serves the form",
@@ -208,6 +221,7 @@ def compare_is_digest_based():
             self.headers = {"Content-Length": str(len(body))}
             self.rfile, self.wfile = io.BytesIO(body), io.BytesIO()
             self.client_address = ("127.0.0.1", 1)
+            self.path = "/auth/demo"
 
     class Lock:
         def __enter__(self): return self
@@ -238,6 +252,91 @@ def compare_is_digest_based():
     check("the code is compared with hmac.compare_digest over SHA-256 digests", ok, str(len(calls)))
     check("...and the unit run accepts the right code and refuses the wrong one",
           wrong.status == 403 and right.status == 303, "%s %s" % (wrong.status, right.status))
+
+
+def counter_is_bounded():
+    """Many distinct, over-long X-Real-IP values must not grow the counter or the audit past its caps."""
+    sys.path.insert(0, os.path.join(ROOT, "src"))
+    from mdreview.hosted import demologin
+
+    audited = []
+
+    class Lock:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    class Store: lock = Lock()
+    class Ids:
+        def audit(self, event, **kw): audited.append(kw.get("ip") or "")
+
+    class Fake:
+        def __init__(self, ip):
+            body = urlencode({"code": "wrong"}).encode()
+            self.headers = {"Content-Length": str(len(body)), "X-Real-IP": ip}
+            self.rfile, self.wfile = io.BytesIO(body), io.BytesIO()
+            self.client_address = ("127.0.0.1", 1)
+            self.path = "/auth/demo"
+        def send_response(self, c): pass
+        def send_header(self, k, v): pass
+        def end_headers(self): pass
+
+    mod = demologin.DemoLoginModule(Store(), None, None, Ids(), KEY, clock=lambda: 1000.0)
+    n = demologin._MAX_TRACKED + 500
+    for i in range(n):
+        mod._login(Fake(("%06d" % i) + "x" * 300))
+    check("the failure counter never holds more than its cap of distinct IPs",
+          len(mod._fails) <= demologin._MAX_TRACKED, str(len(mod._fails)))
+    check("counter keys are at most 64 characters", max(len(k) for k in mod._fails) <= 64)
+    check("audited IP values are at most 64 characters", max(len(a) for a in audited) <= 64)
+    check("the oldest entries are the ones dropped", "000000" + "x" * 58 not in mod._fails
+          and ("%06d" % (n - 1) + "x" * 58) in mod._fails)
+
+
+def seed_interrupt(inst):
+    """An interrupt right after the server mints the seed token must still leave no seed token."""
+    if not inst.up:
+        return
+    sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    import seed_demo
+
+    real = seed_demo.call
+    armed = [True]
+
+    def interrupting(base, method, path, body=None, headers=None):
+        out = real(base, method, path, body, headers)
+        if armed[0] and method == "POST" and path == "/account/tokens":
+            armed[0] = False
+            raise KeyboardInterrupt        # the token exists server-side; the script never sees it
+        return out
+
+    seed_demo.call = interrupting
+    old_argv, old_key = sys.argv, os.environ.get("MDREVIEW_DEMO_LOGIN_KEY")
+    sys.argv = ["seed_demo.py", "--base", inst.base]
+    os.environ["MDREVIEW_DEMO_LOGIN_KEY"] = KEY
+    interrupted = False
+    try:
+        seed_demo.main()
+    except KeyboardInterrupt:
+        interrupted = True
+    finally:
+        seed_demo.call = real
+        sys.argv = old_argv
+        if old_key is None:
+            os.environ.pop("MDREVIEW_DEMO_LOGIN_KEY", None)
+        else:
+            os.environ["MDREVIEW_DEMO_LOGIN_KEY"] = old_key
+    r = post_code(inst, KEY, "10.7.0.1")
+    cookie = session_cookie(r[1])
+    toks = json.loads(req(inst.base + "/account/tokens", headers={"Cookie": cookie})[2])["tokens"]
+    check("the interrupt landed after the mint", interrupted and not armed[0])
+    check("an interrupt between the mint and the listing leaves no seed token",
+          not [t for t in toks if t["label"].startswith("seed-demo-")], str(toks))
+
+    ws = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "seed_demo.py"), "--base", inst.base],
+                        env=dict(os.environ, MDREVIEW_DEMO_LOGIN_KEY=KEY + " "),
+                        capture_output=True, text=True, timeout=60)
+    check("the seed script refuses a code with trailing whitespace and does not print it",
+          ws.returncode != 0 and KEY not in ws.stdout + ws.stderr)
 
 
 def main_flow():
@@ -272,12 +371,18 @@ def main_flow():
               str(len(fail_rows)))
 
         # query string never signs in
-        q1 = req(inst.base + "/auth/demo?key=" + KEY + "&code=" + KEY, "POST", b"",
-                 {"X-Real-IP": "10.2.0.1", "Content-Type": "application/x-www-form-urlencoded"})
-        q2 = req(inst.base + "/auth/demo?key=" + KEY + "&code=" + KEY, headers={"X-Real-IP": "10.2.0.2"})
-        check("?key=<right code> in the URL does not sign in",
-              q1[0] == 403 and not session_cookie(q1[1]) and not session_cookie(q2[1])
-              and q2[0] == 200)
+        qs = "?key=" + KEY + "&code=" + KEY
+        fh = {"Content-Type": "application/x-www-form-urlencoded"}
+        q1 = req(inst.base + "/auth/demo" + qs, "POST", b"other=1", dict(fh, **{"X-Real-IP": "10.2.0.1"}))
+        q3 = req(inst.base + "/auth/demo" + qs, "POST", b"code=wrong-body-code",
+                 dict(fh, **{"X-Real-IP": "10.2.0.3"}))
+        q2 = req(inst.base + "/auth/demo" + qs, headers={"X-Real-IP": "10.2.0.2"})
+        check("?key=<right code> in the URL does not sign in (body without a code)",
+              q1[0] == 403 and not session_cookie(q1[1]))
+        check("the URL never beats or merges with the body (body has a wrong code)",
+              q3[0] == 403 and not session_cookie(q3[1]))
+        check("GET /auth/demo?key=<right code> serves the form and no session",
+              q2[0] == 200 and not session_cookie(q2[1]))
 
         # throttle
         for i in range(5):
@@ -424,8 +529,10 @@ def main():
         route_absent_without_key()
         short_key_refuses_boot()
         compare_is_digest_based()
+        counter_is_bounded()
         inst = main_flow()
         seed_script(inst)
+        seed_interrupt(inst)
         leak_sweep(inst)
     finally:
         if inst:

@@ -36,10 +36,17 @@ MAX_FAILS = 5
 WINDOW_S = 600
 _MAX_BODY = 4096
 _MAX_UA = 200
+_MAX_IP = 64                 # X-Real-IP is client-supplied text; bound what we key and store on
+_MAX_TRACKED = 10000         # most IPs held in the failure counter; the oldest is dropped past this
+_PRUNE_EVERY_S = 30
 
 
 def require_key_strength(key):
     """Boot guard. Never echoes the key, only its length."""
+    if key != key.strip():
+        raise SystemExit("MDREVIEW_DEMO_LOGIN_KEY has leading or trailing whitespace; remove it "
+                         "(a stray newline from an .env edit is the usual cause). Unset it to "
+                         "disable /auth/demo.")
     if len(key) < MIN_KEY_LEN:
         raise SystemExit("MDREVIEW_DEMO_LOGIN_KEY is set but only %d characters long; it must be at "
                          "least %d (generate one with: python3 -c \"import secrets; "
@@ -60,6 +67,7 @@ class DemoLoginModule:
         self._key_digest = _digest(key)
         self._clock = clock
         self._fails = {}                       # ip -> [timestamps of failures still in the window]
+        self._last_prune = 0.0
         self._lock = threading.Lock()
 
     # ---- dispatch ----
@@ -94,6 +102,10 @@ class DemoLoginModule:
 
     # ---- throttle (in memory, per client IP, pruned as entries age) ----
     def _prune(self, now):
+        """Drop aged entries. Runs at most every _PRUNE_EVERY_S; per-IP reads filter for themselves."""
+        if now - self._last_prune < _PRUNE_EVERY_S:
+            return
+        self._last_prune = now
         cutoff = now - WINDOW_S
         for ip in list(self._fails):
             kept = [t for t in self._fails[ip] if t > cutoff]
@@ -102,17 +114,25 @@ class DemoLoginModule:
             else:
                 del self._fails[ip]
 
+    def _recent(self, ip, now):
+        cutoff = now - WINDOW_S
+        return [t for t in self._fails.get(ip, ()) if t > cutoff]
+
     def _locked_out(self, ip, now):
         with self._lock:
             self._prune(now)
-            return len(self._fails.get(ip, ())) >= MAX_FAILS
+            return len(self._recent(ip, now)) >= MAX_FAILS
 
     def _record_fail(self, ip, now):
         """Returns True when this failure is the one that trips the lockout."""
         with self._lock:
             self._prune(now)
-            hits = self._fails.setdefault(ip, [])
+            hits = self._recent(ip, now)
             hits.append(now)
+            self._fails.pop(ip, None)
+            self._fails[ip] = hits             # re-insert so dict order is oldest-activity first
+            while len(self._fails) > _MAX_TRACKED:
+                del self._fails[next(iter(self._fails))]
             return len(hits) == MAX_FAILS
 
     # ---- POST /auth/demo ----
@@ -128,7 +148,7 @@ class DemoLoginModule:
         return values[0] if values else ""
 
     def _login(self, h):
-        ip = AuthModule._client_ip(h)
+        ip = AuthModule._client_ip(h)[:_MAX_IP]
         ua = (h.headers.get("User-Agent", "") or "")[:_MAX_UA]
         now = self._clock()
         code = self._read_code(h)
