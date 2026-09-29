@@ -36,9 +36,12 @@ Use an **absolute interpreter path**, not a bare `python3`: `python3` resolves t
 ## Claude Code plugin
 
 `.claude-plugin/marketplace.json` makes this repo a plugin marketplace with one plugin,
-`plugins/mdreview` (#393). The plugin carries no wrapper code of its own. `plugins/mdreview/mcp_server.py`
-and `plugins/mdreview/mcp` are symlinks into `src/`, and an install copies their targets into the
-plugin cache, so the plugin always ships the same wrapper the installer does. The token is a
+`plugins/mdreview` (#393). The Claude plugin directory rejects symlinks, so `plugins/mdreview/mcp_server.py`
+and `plugins/mdreview/mcp/*.py` are real committed copies of `src/mcp_server.py` and `src/mcp/*.py`,
+minus `update.py` and `bundle.py` (the managed-install self-update, which the plugin never runs).
+After changing anything under `src/mcp/` or `src/mcp_server.py`, run
+`python3 scripts/sync_plugin_wrapper.py` and commit the result. `tests/plugin_wrapper_sync_selfcheck.py`
+runs in pr-checks and fails on drift, a missing or extra file, or any symlink under `plugins/`. The token is a
 `userConfig` option marked sensitive (keychain, never settings.json). The plugin sets
 `MDREVIEW_NO_AUTO_UPDATE=1` because its version is the update channel: bump `version` in
 `plugins/mdreview/.claude-plugin/plugin.json` when the wrapper changes, or `/plugin update` will not
@@ -48,7 +51,7 @@ The plugin runs a bare `python3`, since it can't know an absolute path on the us
 interpreter caveat above applies to it too. `/plugin marketplace add` reads the default branch, so the
 plugin becomes installable once it reaches `main`.
 
-Checks: `tests/plugin_manifest_selfcheck.py` runs in pr-checks. `claude plugin validate . --strict` and
+Checks: `tests/plugin_manifest_selfcheck.py` and `tests/plugin_wrapper_sync_selfcheck.py` run in pr-checks. `claude plugin validate . --strict` and
 `claude plugin validate plugins/mdreview --strict` need the CLI, so run them by hand when a manifest changes.
 
 ## MCP Registry

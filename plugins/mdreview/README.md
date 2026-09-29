@@ -36,8 +36,8 @@ Nothing else is read from your machine, and the plugin does not read tokens or c
 your environment. Documents stay in your account until you delete them. See
 https://mdreview.space/privacy/ for storage, sharing and deletion.
 
-The server's self-update code is switched off in the plugin (`MDREVIEW_NO_AUTO_UPDATE=1`), so the
-plugin's files only change when you update the plugin. The server can open a review link in your
+The plugin contains no self-update code (and sets `MDREVIEW_NO_AUTO_UPDATE=1`), so its files only
+change when you update the plugin. The server can open a review link in your
 browser only if you set `MDREVIEW_OPEN_BROWSER`.
 
 ## Support

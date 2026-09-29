@@ -3,14 +3,11 @@
 
 WHAT THIS GUARDS. `/plugin marketplace add ranawaqas-ai/mdreview-service` reads
 .claude-plugin/marketplace.json, then installs plugins/mdreview by COPYING it into the plugin
-cache. The plugin ships no wrapper code of its own: plugins/mdreview/mcp_server.py and
-plugins/mdreview/mcp are symlinks into src/, so the plugin can never drift from the wrapper the
-installer and the /install/* self-update serve. The install copy dereferences them (verified
-with Claude Code 2.1.281), which this test reproduces with copytree(symlinks=False).
+cache. The plugin holds real copies of src/mcp_server.py and src/mcp/*.py (the plugin directory
+rejects symlinks); tests/plugin_wrapper_sync_selfcheck.py guards that they match src/.
 
-So the ways this breaks are: a manifest field the marketplace needs goes missing, a symlink is
-replaced by a stale real copy or pointed somewhere else, or the copied plugin no longer starts.
-Each is checked below, and the last one by running the copied entrypoint.
+So the ways this breaks here are: a manifest field the marketplace needs goes missing, or the
+copied plugin no longer starts. The last is checked by running the copied entrypoint.
 
 `claude plugin validate` is the stricter check but needs the claude CLI, which this runner does
 not have; run it locally (`claude plugin validate . --strict`) when the manifests change.
@@ -28,7 +25,6 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MARKETPLACE = ROOT / ".claude-plugin" / "marketplace.json"
 SRC = ROOT / "src"
-LINKS = {"mcp_server.py": SRC / "mcp_server.py", "mcp": SRC / "mcp"}
 
 
 def load(path, fails):
@@ -78,11 +74,6 @@ def check_plugin(plugin_dir, fails):
 
     check_listing_files(plugin_dir, p, fails)
 
-    for name, target in LINKS.items():
-        link = plugin_dir / name
-        if not link.is_symlink() or link.resolve() != target.resolve():
-            fails.append(f"plugins/mdreview/{name} must be a symlink to {target.relative_to(ROOT)}")
-
 
 def check_listing_files(plugin_dir, manifest, fails):
     """What Anthropic's plugin directory blocks on (docs: plugins/pre-submission-checklist)."""
@@ -105,10 +96,12 @@ def check_listing_files(plugin_dir, manifest, fails):
 
 
 def check_installed_copy_runs(plugin_dir, fails):
-    """Copy the plugin the way an install does (symlinks dereferenced) and start it from there."""
-    with tempfile.TemporaryDirectory() as tmp:
+    """Copy the plugin the way an install does and start it from there."""
+    scratch = ROOT / ".scratch"   # gitignored; keeps the copy inside the project, not the OS temp dir
+    scratch.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=scratch) as tmp:
         cache = pathlib.Path(tmp) / "mdreview"
-        shutil.copytree(plugin_dir, cache, symlinks=False,
+        shutil.copytree(plugin_dir, cache,
                         ignore=shutil.ignore_patterns("__pycache__"))
         got = run_version(cache / "mcp_server.py")
     want = run_version(SRC / "mcp_server.py")
@@ -132,7 +125,7 @@ def main():
     for f in fails:
         print("FAIL", f)
     if not fails:
-        print("PASS plugin manifests, symlinks, and an installed copy that starts")
+        print("PASS plugin manifests and an installed copy that starts")
     return 1 if fails else 0
 
 
