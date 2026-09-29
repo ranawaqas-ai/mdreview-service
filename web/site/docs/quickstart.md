@@ -10,7 +10,7 @@ docker run -d -p 8137:8080 -v mdreview-data:/data mdreview-service
 ```
 
 Health check: `curl localhost:8137/healthz` → `{"ok":true}`. Reviews persist in the `/data` volume
-across restarts. See [Run](https://github.com/waqaskhan137/mdreview-service#run) for the full
+across restarts. See [Run](https://github.com/ranawaqas-ai/mdreview-service#run) for the full
 options.
 
 ## 2. The review loop

@@ -59,5 +59,5 @@ between tenants beyond the `id`.
 
 ## Still stuck?
 
-The [project README](https://github.com/waqaskhan137/mdreview-service#readme) has the full API
+The [project README](https://github.com/ranawaqas-ai/mdreview-service#readme) has the full API
 table, every env var, and the watcher runbook.

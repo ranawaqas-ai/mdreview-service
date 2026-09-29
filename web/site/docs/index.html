@@ -89,7 +89,7 @@
     <h1>mdreview docs</h1>
     <p>These docs render in the browser (the same way the mdreview viewer renders markdown), so they
     need JavaScript. With JS disabled, read the full documentation in the project README:</p>
-    <p><a href="https://github.com/waqaskhan137/mdreview-service#readme">github.com/waqaskhan137/mdreview-service</a></p>
+    <p><a href="https://github.com/ranawaqas-ai/mdreview-service#readme">github.com/ranawaqas-ai/mdreview-service</a></p>
   </div>
 </noscript>
 
@@ -158,7 +158,7 @@ async function renderMermaid(){
 function buildNav(){
   const nav=document.getElementById('nav');
   nav.innerHTML=PAGES.map(p=>`<a href="#/${p.slug}" data-slug="${p.slug}">${p.label}</a>`).join('')
-    +`<span class="ext"><a href="https://github.com/waqaskhan137/mdreview-service#readme">Full reference (README) ↗</a></span>`;
+    +`<span class="ext"><a href="https://github.com/ranawaqas-ai/mdreview-service#readme">Full reference (README) ↗</a></span>`;
 }
 function setActive(slug){
   document.querySelectorAll('.nav a[data-slug]').forEach(a=>a.classList.toggle('active',a.dataset.slug===slug));
@@ -176,7 +176,7 @@ async function render(){
   let md;
   try{const r=await fetch(page.file);if(!r.ok)throw new Error(r.status);md=await r.text();}
   catch(e){article.innerHTML='<h1>Page unavailable</h1><p>Could not load this page. Try the '
-    +'<a href="https://github.com/waqaskhan137/mdreview-service#readme">README</a>.</p>';return;}
+    +'<a href="https://github.com/ranawaqas-ai/mdreview-service#readme">README</a>.</p>';return;}
   article.innerHTML=window.marked?marked.parse(md):'<pre>'+escapeHtml(md)+'</pre>';
   document.title='mdreview docs · '+page.label;
   await renderMermaid();

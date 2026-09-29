@@ -106,4 +106,4 @@ Every tool is annotated, so a client knows which calls only read and which chang
 ## Privacy and support
 
 What the hosted instance stores and who can see it is in the [privacy policy](https://mdreview.space/privacy/).
-Bugs and questions go to [GitHub issues](https://github.com/waqaskhan137/mdreview-service/issues).
+Bugs and questions go to [GitHub issues](https://github.com/ranawaqas-ai/mdreview-service/issues).

@@ -78,7 +78,7 @@ job — re-check `turn` and keep renewing the lease.
 
 ## MCP server (optional)
 
-The [`mcp` package](https://github.com/waqaskhan137/mdreview-service#mcp-server-optional) is a
+The [`mcp` package](https://github.com/ranawaqas-ai/mdreview-service#mcp-server-optional) is a
 thin, stdlib-only stdio MCP server that exposes the API as first-class tools (`create_review`,
 `list_reviews`, `update_source`, the comment tools, and the turn-baton tools `hand_back` /
 `ping_working`), so an MCP-speaking agent calls it without hand-rolling HTTP:
@@ -110,4 +110,4 @@ docker run -d -p 9000:8080 -v my-mdreview:/data mdreview-service
 
 The service has **no auth** — if you expose it beyond localhost, put a proxy/token in front; the
 `id` namespace is the only isolation between reviews. See the
-[full config and API](https://github.com/waqaskhan137/mdreview-service#api) in the README.
+[full config and API](https://github.com/ranawaqas-ai/mdreview-service#api) in the README.
