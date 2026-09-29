@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "mdreview",
   "display_name": "mdreview",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Human-in-the-loop document review for agents. Push a markdown or LaTeX draft, a person comments in the browser, and Claude reads the comments and revises.",
   "long_description": "mdreview lets Claude hand a draft to a person and get structured feedback back. Claude creates a review from markdown (or LaTeX) and returns a link. The reviewer opens it in the browser and leaves comments anchored to specific phrases. Claude reads the open comments, applies the edits, replies to or resolves each thread, and hands the turn back. Reviews live on https://app.mdreview.space and need an mdreview agent token from your account page.",
   "author": {

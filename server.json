@@ -3,7 +3,7 @@
   "name": "io.github.ranawaqas-ai/mdreview",
   "title": "mdreview",
   "description": "Human-in-the-loop document review: an agent pushes a draft, a person comments, the agent revises.",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "websiteUrl": "https://mdreview.space",
   "repository": {
     "url": "https://github.com/ranawaqas-ai/mdreview-service",
