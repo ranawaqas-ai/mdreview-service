@@ -8,11 +8,13 @@ Prepared 2026-09-28 against the live docs (claude.com/docs/plugins/submit, plugi
 
 Eligibility: Pro, Max, Team or Enterprise. On Pro and Max you submit from your own account with no role check. So a Team plan is not needed, and a Pro or Max plan is. Free accounts cannot submit. Your GitHub account must be connected to claude.ai and have push access to `ranawaqas-ai/mdreview-service` (the portal checks this at create and submit time; Validate alone does not).
 
-## Blocker to fix before submitting
+## Blocker (resolved): symlinks
 
-The docs say to commit regular files, not symbolic links, and that a symlink "blocks where the plugin loads the entry". `plugins/mdreview/mcp_server.py` is a symlink and it is the MCP server entry, so Validate will block. Separately, "people who install the plugin get only the plugin folder", so a symlink into `src/` cannot resolve for a directory install. The marketplace install from GitHub works today only because Claude Code dereferences the links when it copies the plugin.
+The checklist says: "Commit regular files and folders for everything the plugin loads, not symbolic links, Git submodules, or Git LFS pointer files" (result: Blocks where the plugin loads the entry). `plugins/mdreview/mcp_server.py` was a symlink and is the MCP server entry, so Validate would have blocked. Also, "people who install the plugin get only the plugin folder".
 
-Fix (owner decision, not done here because it changes the layout): replace the two symlinks with real copies of `src/mcp_server.py` and `src/mcp/*.py`, and change `tests/plugin_manifest_selfcheck.py` to assert the copies are byte-identical to `src/` (plus a one-line sync script). That keeps a single source of truth without symlinks.
+What changed: the two symlinks are now real committed copies of `src/mcp_server.py` and `src/mcp/*.py` (6 files), rebuilt by `scripts/sync_plugin_wrapper.py`. `tests/plugin_wrapper_sync_selfcheck.py` runs in pr-checks and fails on any byte difference from `src/`, a missing or extra file, or any symlink under `plugins/`. Verified: the plugin copy passes `tests/mcp_smoke.py` (48 checks) against a throwaway server, reports the same `tools_hash` as `src/`, and a local marketplace install runs from the plugin cache.
+
+Effect on the self-update scan finding: `update.py` and `bundle.py` are omitted from the plugin copy, so no self-update code ships in the plugin at all. `__main__` imports `update` inside try/except and the plugin sets `MDREVIEW_NO_AUTO_UPDATE=1`, so nothing changes at runtime. The finding below should no longer apply, though that is unconfirmed until the portal scan runs.
 
 ## Answers, by portal step
 
@@ -73,14 +75,14 @@ Sign in at https://app.mdreview.space with any email address (a one-time link is
 
 | Finding | Expected result | Why |
 |---|---|---|
-| Symlinks | Blocks | See the blocker above. |
+| Symlinks | Passes | Real files now; enforced by the sync selfcheck. |
 | README of 40+ words | Passes | `plugins/mdreview/README.md`, added in this change. |
 | License | Passes | `license` field. |
 | Local MCP server command | Passes | `python3 ${CLAUDE_PLUGIN_ROOT}/mcp_server.py`, plain arguments, no shell, no package launcher. |
 | Scripts the validator couldn't follow | Held for a reviewer | The plugin folder is a subfolder and the server is a non-shell Python file. Avoiding it needs the plugin at a repository root. Held is not a rejection. |
 | Credentials | Passes | The token comes from a `sensitive` userConfig option, not a file or the environment. |
-| Security scan: undisclosed behavior | Risk | `src/mcp/update.py` downloads wrapper files from the server and overwrites the installed copy. The plugin sets `MDREVIEW_NO_AUTO_UPDATE=1`, and the README says so, but a scanner reading the source may still flag it. It also reads a local file for `attach_asset` and can open a browser (opt-in). All three are disclosed in the README. |
-| Files | Passes | 8 Python files, all under 256 KiB, no binaries. |
+| Security scan: undisclosed behavior | Lower risk | `src/mcp/update.py` (downloads wrapper files and overwrites the installed copy) is no longer in the plugin. It still reads a local file for `attach_asset` and can open a browser (opt-in). Both are disclosed in the README. |
+| Files | Passes | 6 Python files, all under 256 KiB, no binaries. |
 
 ## Also required by the docs, not done
 
@@ -88,7 +90,7 @@ The docs say that if you run a remote MCP server you should submit it as an MCP 
 
 ## Before you submit
 
-- [ ] Decide on the symlink fix and merge it, so Validate on `main` passes.
+- [x] Symlink fix (real copies plus sync script); it still has to reach `main` so Validate passes there.
 - [ ] Confirm the claude.ai account is Pro or Max (or higher) and that GitHub is connected with push access.
 - [ ] Merge this branch to `main` (the tracked branch) through the normal dev to main release.
 - [ ] `claude plugin validate . --strict` and `claude plugin validate plugins/mdreview --strict` pass.
@@ -100,4 +102,4 @@ The docs say that if you run a remote MCP server you should submit it as an MCP 
 
 ## Not confirmed
 
-The portal's own screens (behind sign-in), the category field, the exact wording of the four acknowledgements, the two Anthropic policy articles, and whether the security scanner flags `update.py`.
+The portal's own screens (behind sign-in), the category field, the exact wording of the four acknowledgements, the two Anthropic policy articles, and whether the security scanner still flags anything now that `update.py` is gone from the plugin.
