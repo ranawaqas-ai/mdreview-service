@@ -43,7 +43,7 @@ services:
       # prod serves the :latest image built from main. It takes effect when the owner syncs this
       # file and recreates the container (owner decision D1). Overrides the 43200 (12h) code default.
       MDREVIEW_SESSION_TTL_S: "${MDREVIEW_SESSION_TTL_S:-2592000}"
-      # Reviewer sign-in at /auth/demo (docs/operations/demo-login.md). Name only: the value lives in
+      # Reviewer sign-in at /auth/demo (docs/operations/demo-login.md). Name only. The value lives in
       # the host .env. Empty keeps the route off (it then 404s); a set value under 32 chars refuses boot.
       MDREVIEW_DEMO_LOGIN_KEY: "${MDREVIEW_DEMO_LOGIN_KEY:-}"
     networks:
