@@ -16,6 +16,10 @@ Mutation checks (each was applied by hand and run; the check named after it must
   * remove the throttle (_locked_out -> False)    -> "the 6th attempt from one IP is refused even with the right code"
   * make the demo uid admin (set_admin after resolve) -> "/auth/session reports is_admin false"
   * accept the code from the query string          -> "?key=<right code> in the URL does not sign in"
+  * merge the URL query into the body / read the URL first -> the two "?key=" body checks
+  * drop the counter cap / the 64-char IP cap      -> the "failure counter" and "64 characters" checks
+  * drop the whitespace boot guard                 -> "a key with leading space refuses to boot ..."
+  * make the seed script's label-based revoke a no-op -> "an interrupt between the mint and the listing ..."
 
 Run: python3 tests/demo_login_selfcheck.py     (exit 0 = pass)
 """
