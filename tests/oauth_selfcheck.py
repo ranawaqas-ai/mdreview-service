@@ -11,7 +11,9 @@ Boots a throwaway hosted instance (stub email; the magic link is read from the s
 
 Mutation checks: make redirect_allowed parse the hostname again (urlparse) and the backslash and
 CR/LF cases fail; prune expired rows in UserService.mint_token with no grace and the idle-connector
-case fails; make pkce_ok return True and the wrong-verifier case fails; make redirect_allowed
+case fails; make _register store and echo the unfiltered list and the "echoing only the allowed URIs"
+and "only the allowed URI is echoed" cases fail; add a backslash to the _LOOPBACK path class and the
+"'http://localhost/cb\\x' alone is refused" case fails; make pkce_ok return True and the wrong-verifier case fails; make redirect_allowed
 return True and the foreign-redirect case fails; drop the _same_origin check in _consent and the
 cross-site consent case fails.
 
@@ -172,6 +174,88 @@ def expired_row_survives_other_mints():
           users.token_id(idle2) in [t["tok_id"] for t in users.list_tokens("u:1")])
 
 
+CURSOR = ["cursor://anysphere.cursor-mcp/oauth/callback",
+          "https://www.cursor.com/agents/mcp/oauth/callback", "http://localhost:8787/callback"]
+VSCODE = ["https://insiders.vscode.dev/redirect", "https://vscode.dev/redirect",
+          "http://127.0.0.1/", "http://127.0.0.1:33418/"]
+# Each alone must be refused: header injection, browser/urlparse host confusion, lookalike hosts,
+# and the other parts of a URL a loopback receiver must not carry.
+REFUSED = ["http://localhost/cb\r\nSet-Cookie: mdr_pwn=1", "http://localhost/cb\n", "http://localhost/cb\\x",
+           "http://evil.example\\@localhost/cb", "http://user@localhost/cb", "http://localhost/cb#x",
+           "http://localhost/cb?x=1", "http://LOCALHOST/cb", "http://localhost.evil.example/cb",
+           "http://127.0.0.1.evil.example/cb", "http://localhost:65536/cb", "http://localhost:99999/cb",
+           "http://localhost:٨٠/cb", "https://localhost/cb", "http://[::1]/cb"]
+
+
+def registration_filter(inst, register, session):
+    """Registration keeps only allowed redirect URIs (Cursor and VS Code register several at once);
+    a dropped one is never stored, echoed or usable at authorize. Malformed input stays a 400."""
+    _, lc = pkce()
+
+    def authorize(client_id, uri):
+        return req(authorize_url(inst, client_id, lc, redirect=uri), headers={"Cookie": session})
+
+    def reaches_consent(client_id, uri):
+        nonce, code, _ = consent(inst, session, client_id, lc, redirect=uri)
+        return code == 200 and bool(nonce)
+
+    for label, uris, kept, dropped, used in (
+            ("Cursor", CURSOR, ["http://localhost:8787/callback"], CURSOR[:2], "http://localhost:8787/callback"),
+            ("VS Code", VSCODE, VSCODE[2:], VSCODE[:2], "http://127.0.0.1:59656/")):
+        for order, sent in (("as sent", uris), ("reversed", uris[::-1])):
+            code, reg = register(sent, label)
+            check("register %s (%s): 201 echoing only the allowed URIs" % (label, order),
+                  code == 201 and sorted(reg.get("redirect_uris", [])) == sorted(kept), reg)
+            cid = reg.get("client_id", "")
+            check("authorize %s (%s): the loopback URI reaches consent" % (label, order),
+                  reaches_consent(cid, used))
+            for d in dropped:
+                code, hdrs, _ = authorize(cid, d)
+                check("authorize %s (%s): dropped %s -> 400 page, no redirect" % (label, order, d),
+                      code == 400 and not hdrs.get("Location"), code)
+
+    code, reg = register(["https://evil.example/cb", "https://other.example/cb"])
+    check("register: every URI off the allowlist -> 400 invalid_redirect_uri",
+          code == 400 and reg.get("error") == "invalid_redirect_uri", reg)
+
+    attacker = ["http://evil.example\\@localhost/cb", "http://localhost/cb\r\nSet-Cookie: mdr_pwn=1",
+                "http://localhost.evil.example/cb", "https://evil.example/cb"]
+    for order, sent in (("attacker first", attacker + [CALLBACK]), ("attacker last", [CALLBACK] + attacker)):
+        code, hdrs, raw = req(inst.base + "/oauth/register", "POST",
+                              json.dumps({"redirect_uris": sent}).encode(), {"Content-Type": "application/json"})
+        body = json.loads(raw)
+        check("register mixed (%s): only the allowed URI is echoed, nothing injected" % order,
+              code == 201 and body.get("redirect_uris") == [CALLBACK] and not hdrs.get("Set-Cookie")
+              and b"evil" not in raw and b"mdr_pwn" not in raw, raw)
+        for a in attacker:
+            c, h_, _ = authorize(body.get("client_id", ""), a)
+            check("authorize mixed (%s): attacker URI %r -> 400 page, no redirect" % (order, a[:40]),
+                  c == 400 and not h_.get("Location"), c)
+
+    for label, value in (("a string", CALLBACK), ("an empty list", []), ("a non-string element", [CALLBACK, 5]),
+                         ("an element over 2048 chars", [CALLBACK, "http://localhost/" + "a" * 2048]),
+                         ("more than 10 URIs", [CALLBACK] * 11)):
+        code, reg = register(value)
+        check("register: redirect_uris as %s -> whole request refused" % label,
+              code == 400 and reg.get("error") == "invalid_redirect_uri", code)
+
+    code, reg = register(["http://127.0.0.1:41000/oauth_callback"], "goose")
+    check("register: Goose's /oauth_callback loopback path -> 201", code == 201, code)
+    gid = reg.get("client_id", "")
+    check("authorize: Goose /oauth_callback on another port reaches consent",
+          reaches_consent(gid, "http://127.0.0.1:41001/oauth_callback"))
+    code, hdrs, _ = authorize(gid, "http://127.0.0.1:41001/oauth-callback")
+    check("authorize: Goose client, a different path -> 400 page, no redirect",
+          code == 400 and not hdrs.get("Location"), code)
+
+    for uri in REFUSED:
+        code, reg = register([uri])
+        check("register: %r alone is refused" % uri, code == 400, code)
+    for uri in ("http://localhost:65535/cb", "http://localhost:1/cb", "http://127.0.0.1:8080/oauth_callback"):
+        code, _ = register([uri])
+        check("register: %r is still accepted" % uri, code == 201, code)
+
+
 def main():
     shutil.rmtree(DATA, ignore_errors=True)
     os.makedirs(DATA)
@@ -251,6 +335,8 @@ def run(inst):
     check("sign-in returns to the authorize request", landed == url[len(b):], landed)
     _, landed_evil = inst.login("a@e.com", extra_cookie="mdr_return=" + quote("https://evil.example/x", safe=""))
     check("sign-in ignores a return cookie that is not /oauth/authorize (no open redirect)", landed_evil == "/", landed_evil)
+
+    registration_filter(inst, register, session_a)
 
     # ---- consent ----
     nonce, code, hdrs = consent(inst, session_a, client_id, challenge)
