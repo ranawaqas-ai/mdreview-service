@@ -27,6 +27,7 @@ from mdreview.server import Services
 from mdreview.hosted.adminroutes import AdminModule
 from mdreview.hosted.authroutes import AuthModule
 from mdreview.hosted.custody import CustodyPolicy
+from mdreview.hosted.demologin import DemoLoginModule, require_key_strength
 from mdreview.hosted.identity import AccountService, HostedIdentity
 from mdreview.hosted.identity_store import IdentityStore
 from mdreview.hosted.oauth import OAuthModule
@@ -120,6 +121,11 @@ def build_hosted(store):
         raise SystemExit("hosted build with the transitional proxy plane on requires MDREVIEW_PROXY_SECRET "
                          "(or set MDREVIEW_ALLOW_PROXY_PLANE=0 to retire it)")
     link_base = canonical_base()
+    # Reviewer sign-in (docs/operations/demo-login.md): off unless the key is set, and refuses to
+    # boot on a short one. Checked here with the other guards so a bad key never reaches serving.
+    demo_key = os.environ.get("MDREVIEW_DEMO_LOGIN_KEY", "")
+    if demo_key:
+        require_key_strength(demo_key)
     # H2: SELECT the email backend from config (refuses to boot if no real sender and no stub opt-in);
     # NEVER hard-wire the stub, which would print magic-link tokens to the logs on a prod build.
     email_sender = select_email_sender()
@@ -180,6 +186,10 @@ def build_hosted(store):
     # prefixes are disjoint (/auth/*, /admin/*, and the sharing /api/reviews/{rid}/public|shares owner
     # routes), so relative order is immaterial. SharingModule and AdminModule are BOTH wired — sharing
     # widens read/comment via owner-granted shares, admin adds the audited super-read + user-mgmt.
+    # The demo route goes BEFORE AuthModule, which claims every /auth/* path. With the key unset
+    # the module is simply absent, so /auth/demo is AuthModule's ordinary 404.
+    if demo_key:
+        app.modules.append(DemoLoginModule(store, accounts, sessions, id_store, demo_key))
     app.modules.append(AuthModule(store, app.users, sessions, magic, accounts, id_store))
     app.modules.append(AdminModule(store, app.users, id_store, sessions))
     app.modules.append(SharingModule(app.reviews, shares, sessions, app.users))
