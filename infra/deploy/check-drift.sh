@@ -58,7 +58,7 @@ n=$(run "grep -vcE '^#|^[[:space:]]*$' ~/mdreview-deploy/oauth2-proxy/invited-em
 #    tests/drift_prod_selfcheck.sh, which parses the repo's actual compose file and fails if its
 #    MDREVIEW_* key set no longer matches this list — a silent rot here would reproduce #360 one level
 #    up. Kept on ONE line (not wrapped) so that selfcheck's sync guard can extract it with a plain grep.
-EXPECTED_MDREVIEW_KEYS="MDREVIEW_PUBLIC_BASE MDREVIEW_REQUIRE_AUTH MDREVIEW_PROXY_SECRET MDREVIEW_TOKEN_PEPPER MDREVIEW_SESSION_SECRET MDREVIEW_SESSION_TTL_S"
+EXPECTED_MDREVIEW_KEYS="MDREVIEW_PUBLIC_BASE MDREVIEW_REQUIRE_AUTH MDREVIEW_PROXY_SECRET MDREVIEW_TOKEN_PEPPER MDREVIEW_SESSION_SECRET MDREVIEW_SESSION_TTL_S MDREVIEW_DEMO_LOGIN_KEY"
 for k in $EXPECTED_MDREVIEW_KEYS; do
   echo "$env" | grep -qE "^${k}=" && ok "$k declared in running env" \
     || drift "$k missing from running env (compose declares it, container does not have it)"

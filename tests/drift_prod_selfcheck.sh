@@ -87,6 +87,7 @@ MDREVIEW_PROXY_SECRET=test-proxy-secret
 MDREVIEW_TOKEN_PEPPER=test-token-pepper
 MDREVIEW_SESSION_SECRET=test-session-secret
 MDREVIEW_SESSION_TTL_S=2592000
+MDREVIEW_DEMO_LOGIN_KEY=
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 E
 
