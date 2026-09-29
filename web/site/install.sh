@@ -13,7 +13,7 @@
 set -eu
 
 HOSTED="https://app.mdreview.space"
-TARBALL="https://github.com/waqaskhan137/mdreview-service/archive/refs/heads/main.tar.gz"
+TARBALL="https://github.com/ranawaqas-ai/mdreview-service/archive/refs/heads/main.tar.gz"
 HOME_DIR="$HOME/.mdreview"
 DEST="$HOME_DIR/mdreview-service"
 PORT="${MDREVIEW_PORT:-8137}"

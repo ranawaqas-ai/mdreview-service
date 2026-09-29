@@ -26,7 +26,7 @@ flowchart LR
 - **[Troubleshooting](#/troubleshooting)** — the handful of footguns and their fixes.
 
 For the exhaustive API table, every env var, and the watcher runbook, see the
-[project README](https://github.com/waqaskhan137/mdreview-service#readme) — these docs link to it
+[project README](https://github.com/ranawaqas-ai/mdreview-service#readme) — these docs link to it
 rather than duplicate it.
 
 ## What you get
