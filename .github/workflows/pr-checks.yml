@@ -144,3 +144,9 @@ jobs:
       # code replay, forged consent, wrong resource, spent refresh). Mutation-checked.
       - name: OAuth selfcheck
         run: python3 tests/oauth_selfcheck.py
+
+      # Reviewer sign-in (/auth/demo): route absent without the key, boot guard, identical 403s,
+      # body-only code, per-IP lockout, non-admin session, return-cookie allowlist, no code leaks,
+      # and scripts/seed_demo.py (idempotent, wipes, revokes its token). Mutation-checked.
+      - name: Demo login selfcheck
+        run: python3 tests/demo_login_selfcheck.py

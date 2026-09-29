@@ -42,6 +42,9 @@ services:
       # container. The default is carried here rather than in .env.staging so the 30 days survive a
       # fresh host with no env entry; the code default it overrides is 43200 (12h).
       MDREVIEW_SESSION_TTL_S: "${MDREVIEW_SESSION_TTL_S:-2592000}"
+      # Reviewer sign-in at /auth/demo (docs/operations/demo-login.md). Name only. The value lives in
+      # the host .env. Empty keeps the route off (it then 404s); a set value under 32 chars refuses boot.
+      MDREVIEW_DEMO_LOGIN_KEY: "${MDREVIEW_DEMO_LOGIN_KEY:-}"
       # The verified email crowned owner/admin on this staging instance (never the first registrant).
       MDREVIEW_OWNER_EMAIL: "${MDREVIEW_OWNER_EMAIL:?set MDREVIEW_OWNER_EMAIL in .env.staging}"
       # Real magic-link delivery via SMTP (Azure ACS — see infra/deploy/RUNBOOK-email-smtp.md). Empty by
