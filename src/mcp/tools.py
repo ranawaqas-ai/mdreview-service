@@ -18,14 +18,14 @@ SERVER_INFO = {"name": "mdreview-mcp", "version": "0.1.0"}
 INSTRUCTIONS = (
     "mdreview is human-in-the-loop review of a markdown document (or, with kind=\"latex\", a LaTeX "
     "paper). Loop: create_review -> hand the returned review_url to the human -> poll get_status "
-    "(cheap) -> when it changes, call list_comments(status=\"open\") FIRST, then get_feedback -> apply "
+    "(cheap) -> when it changes, start with list_comments(status=\"open\"), then get_feedback -> apply "
     "the edits with update_source (the human's page live-reloads) -> reply_to_comment / "
     "resolve_comment -> hand_back. get_source reads the current draft (e.g. when resuming a review). "
     "Author for the viewer's renderer: diagrams as ```mermaid blocks, math as $...$, images via "
-    "attach_asset (pass a path), never ASCII art or a plain fence. Operate only on reviews you "
+    "attach_asset, never ASCII art or a plain fence. Operate only on reviews you "
     "created. If a tool is missing or misbehaves, read the server_info description: it says what "
     "that means and what to do. Each tool's description carries its own rules (LaTeX mode, "
-    "templates, guarded saves, the turn baton); read it before first use."
+    "templates, guarded saves, the turn baton)."
 )
 
 _ID = {"type": "string", "description": "the opaque review id"}
@@ -37,24 +37,20 @@ _CID = {"type": "string", "description": "the comment id (cXXXXXXXXXX)"}
 TOOLS = [
     {
         "name": "create_review",
-        "description": "Create a review from markdown; returns the id and the review/feedback urls. "
-                       "AUTHOR TO THE VIEWER'S RENDERER, don't dumb the markdown down: it renders GFM + "
-                       "**Mermaid diagrams** (```mermaid fenced blocks), **LaTeX math** ($…$ inline, "
-                       "$$…$$ display), **GFM footnotes**, **syntax-highlighted** fenced code (label the "
-                       "language), and **images** (attach via attach_asset). So a flow / decision-tree / "
-                       "state machine / architecture should be a ```mermaid diagram — NOT ASCII art or a "
-                       "plain ``` code block (a plain fence renders as monospace text, not a picture). "
-                       "Optional project/session/source_path tag its provenance for the dashboard. "
-                       "kind=\"latex\" (opt-in, default \"markdown\") instead makes a research-paper "
-                       "review: `markdown` then carries RAW LaTeX (a single .tex document), shown in an "
-                       "Overleaf-style split viewer with a live server-compiled PDF; the markdown/mermaid "
-                       "authoring rule does not apply to a latex review. If the content IS LaTeX \u2014 a .tex "
-                       "source_path, or a body with \\documentclass / \\begin{document} \u2014 you MUST pass "
-                       "kind=\"latex\"; a latex-enabled server REJECTS such a create when kind is omitted. "
-                       "CAVEAT, kind is IMMUTABLE: 'converting' an existing review to the other format does "
-                       "not transform it, it creates a NEW, separate review (new id + URL) with RE-AUTHORED "
-                       "content that must be re-reviewed; comments and history do NOT carry over and the "
-                       "original stays live. Warn the human first and offer to link the two.",
+        "description": "Create a review from markdown; returns the id and the review and feedback urls. The "
+                       "viewer renders GFM, Mermaid diagrams (```mermaid fenced blocks), LaTeX math ($...$ "
+                       "inline, $$...$$ display), GFM footnotes, syntax-highlighted fenced code (label the "
+                       "language) and images (attach them with attach_asset). A flow, decision tree, state "
+                       "machine or architecture reads best as a ```mermaid diagram, since a plain code fence "
+                       "renders as monospace text. Optional project, session and source_path record where "
+                       "the draft came from, for the dashboard. kind=\"latex\" (default \"markdown\") makes a "
+                       "research-paper review instead: `markdown` then carries raw LaTeX (a single .tex "
+                       "document), shown in a split viewer with a live server-compiled PDF, and the markdown "
+                       "rules do not apply. If the content is LaTeX (a .tex source_path, or a body with "
+                       "\\documentclass or \\begin{document}), set kind=\"latex\"; a latex-enabled server "
+                       "rejects the create otherwise. kind cannot change later. Recreating a review in the "
+                       "other format makes a new review with a new id and url, and its comments and history "
+                       "do not carry over.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -137,19 +133,15 @@ TOOLS = [
     },
     {
         "name": "update_source",
-        "description": "Push a revised draft (applied edits). Snapshots a history round and live-reloads "
-                       "the human's page. For a markdown review, same authoring rule as create_review: use "
-                       "the viewer's renderer — a flow/decision-tree/architecture belongs in a ```mermaid "
-                       "block, math in $…$/$$…$$, code in a language-labelled fence — not ASCII art or a "
-                       "plain ```  fence. For a kind=latex review the draft is RAW LaTeX (a single .tex "
-                       "document); the server recompiles it to PDF on each push, and the mermaid/markdown "
-                       "rule does not apply. CONCURRENT EDITS: the human can now edit the document too, so "
-                       "prefer a guarded save — read via get_source(with_revision=true) and pass that "
-                       "revision as expected_revision. A stale revision fails with HTTP 409 and writes "
-                       "NOTHING; on a 409 you MUST re-read the source, re-apply your change onto the new "
-                       "text, and save with the fresh revision. NEVER resend a buffered draft after a 409 "
-                       "— it would silently overwrite the human's edit. Omitting expected_revision is the "
-                       "old unconditional write.",
+        "description": "Push a revised draft (applied edits). Snapshots a history round and live-reloads the "
+                       "human's page. A markdown review is rendered as in create_review (Mermaid, math, "
+                       "highlighted code). For a kind=latex review the draft is raw LaTeX (a single .tex "
+                       "document) and the server recompiles it to PDF on each push. The human can edit the "
+                       "document too, so save with a guard: read via get_source(with_revision=true) and pass "
+                       "that revision as expected_revision. A stale revision fails with HTTP 409 and writes "
+                       "nothing. On a 409, re-read the source, re-apply your change onto the new text and "
+                       "save with the fresh revision; never resend the earlier draft, which would silently "
+                       "overwrite the human's edit. Omitting expected_revision is an unconditional write.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -178,15 +170,10 @@ TOOLS = [
     },
     {
         "name": "get_git_url",
-        "description": "Get a review's git-clone URL (#379): a real, clonable git remote — one commit "
-                       "per past round plus a live tip commit, so `git log`/`git diff`/`git blame` work "
-                       "with standard tools. Only present on a server built with git-tracked history "
-                       "enabled; if it 404s, that instance doesn't have the feature on. `git clone "
-                       "<git_url>` works as-is on an open/local instance. On a server that requires "
-                       "auth, the URL carries no embedded credential (a token in the URL would send "
-                       "Basic auth, not the Bearer this server checks) — clone with your token as an "
-                       "extra header instead: `git -c http.extraheader=\"Authorization: Bearer "
-                       "<your token>\" clone <git_url>`. Read-only: no push, no branching (v1).",
+        "description": "Returns a git clone URL for a review's history: one commit per past round plus a "
+                       "live tip commit, so git log, git diff and git blame work with standard tools. Only "
+                       "available when the server has git-tracked history enabled; otherwise the call "
+                       "returns 404. Read-only: no push, no branching.",
         "inputSchema": {"type": "object", "properties": {"id": _ID}, "required": ["id"]},
     },
     {
@@ -196,21 +183,20 @@ TOOLS = [
     },
     {
         "name": "attach_asset",
-        "description": "Attach an image to a review so the viewer serves and renders it. "
-                       "PREFER `path`: pass a local file path and this server reads + encodes the "
-                       "bytes itself, so you never emit base64 through your context (the right way for "
-                       "anything bigger than a tiny icon — a 38KB SVG is ~50K chars of base64 you "
-                       "should NOT hand-carry). Use `content_b64` only if the file isn't on this "
-                       "machine. Pass `name` as the exact src the draft uses (e.g. \"/assets/x.png\" "
-                       "or \"fig/y.svg\"); attach once — it survives every update_source revision. "
+        "description": "Attach an image to a review so the viewer serves and renders it. Pass the file bytes "
+                       "as `content_b64` (base64) and `name` as the exact src the draft uses (for example "
+                       "\"/assets/x.png\" or \"fig/y.svg\"). Attach once; it survives every update_source "
+                       "revision. On the local stdio server you can pass `path` instead, a local file path "
+                       "the wrapper reads and encodes for you, which keeps large files out of the "
+                       "conversation. A remote server cannot read your files, so it needs `content_b64`. "
                        "Returns the stored name and the served url.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "id": _ID,
                 "name": {"type": "string", "description": "the draft <img> src this asset backs (the match key)"},
-                "path": {"type": "string", "description": "local file path the server reads + base64-encodes (preferred)"},
-                "content_b64": {"type": "string", "description": "the file bytes, base64-encoded (use only if no local path)"},
+                "path": {"type": "string", "description": "local file path, read and base64-encoded by the local stdio server (not available on a remote server)"},
+                "content_b64": {"type": "string", "description": "the file bytes, base64-encoded (required on a remote server)"},
             },
             "required": ["id", "name"],
         },
@@ -242,10 +228,8 @@ TOOLS = [
     },
     {
         "name": "list_comments",
-        "description": "List comments on a document. Call this FIRST to see what the reviewer raised "
-                       "and what needs attention; only address what the reviewer actually flagged. "
-                       "`status` filters: open (default) | resolved | reopened | all. Reply to a "
-                       "comment to discuss it, resolve it only once you've genuinely addressed it.",
+        "description": "List comments on a document, filtered by `status`: open (default), resolved, "
+                       "reopened or all. Reply to a comment to discuss it; resolve it once it is addressed.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -298,11 +282,9 @@ TOOLS = [
     },
     {
         "name": "delete_comment",
-        "description": "HARD-delete a comment (and its whole thread) — for cleaning up a junk/mistaken "
-                       "comment. This is different from resolve_comment: resolve just hides a real "
-                       "comment in the Resolved panel; delete removes it entirely and irreversibly. "
-                       "Use it only on a comment you created by mistake, never to dismiss the "
-                       "reviewer's feedback (resolve that).",
+        "description": "Permanently deletes a comment and its whole thread. This cannot be undone. Use it to "
+                       "remove a comment created by mistake; resolve_comment marks a real comment addressed "
+                       "and keeps it in the Resolved panel.",
         "inputSchema": {
             "type": "object",
             "properties": {"document_id": _DOCID, "comment_id": _CID},
@@ -311,15 +293,14 @@ TOOLS = [
     },
     {
         "name": "hand_back",
-        "description": "Hand the turn baton back to the reviewer after you've acted on their feedback. "
-                       "Sets turn=reviewer on the review so the viewer's banner flips to 'Agent updated "
-                       "the draft … your turn' (state=done) — or 'Agent needs you' (state=blocked) when "
-                       "you replied with a question instead of finishing. Call it when you're done "
-                       "(after update_source + reply/resolve on the comments you addressed) or when "
-                       "blocked. This is the AGENT's half of the loop; the human's 'Send to agent' and "
-                       "'Take back the turn' are viewer actions. For blocked, pair this with a comment "
-                       "reply asking the question — never reopen (reopen is the reviewer's UI action). "
-                       "Not available on a kind=latex review: there is no turn baton in latex mode.",
+        "description": "Hand the turn back to the reviewer. Sets turn=reviewer on the review, so the "
+                       "viewer's banner reads 'Agent updated the draft, your turn' (state=done, the default) "
+                       "or 'Agent needs you' (state=blocked, used when you replied with a question instead "
+                       "of finishing); `message` is shown in that banner. Use it after update_source and the "
+                       "replies or resolves on the comments you addressed, or when blocked; for blocked, "
+                       "pair it with a comment reply that asks the question. Reopening a comment is a "
+                       "reviewer action in the viewer, not an agent action. Not available on a kind=latex "
+                       "review, which has no turn baton.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -355,15 +336,12 @@ TOOLS = [
     },
     {
         "name": "server_info",
-        "description": "Report THIS running MCP server's identity: name, version, protocol_version, "
-                       "tools_hash, tool_count, tool_names — so you can see what the *running* process "
-                       "exposes. This SURFACES the running server's identity; it does NOT by itself tell "
-                       "you the server is stale. A human/CI compares this tools_hash to the repo's "
-                       "`python3 mcp_server.py --print-version`; a managed wrapper (~/.mdreview) also "
-                       "auto-updates from its server on startup, so on a suspected-stale hash just "
-                       "RECONNECT the MCP client and the update takes effect (the server can signal "
-                       "staleness but never reloads a live process). An MCP-only agent cannot "
-                       "self-detect staleness — it has the running hash but no on-disk comparand over MCP.",
+        "description": "Reports this running MCP server's name, version, protocol_version, tools_hash, "
+                       "tool_count and tool_names. It describes only the running process and makes no call "
+                       "to the service. A human or CI compares tools_hash to `python3 mcp_server.py "
+                       "--print-version` on disk; if they differ, the running process is stale and the MCP "
+                       "client should be reconnected to load the new code. An MCP-only agent has no on-disk "
+                       "value to compare with, so it cannot make that check itself.",
         "inputSchema": {"type": "object", "properties": {}},
     },
 ]

@@ -38,7 +38,7 @@ ALLOWED_REDIRECTS = ("https://claude.ai/api/mcp/auth_callback",
 # One whole-string match, never a parsed hostname: urlparse and browsers disagree on inputs such as
 # "http://evil.example\@localhost/cb" (Python sees localhost, a browser goes to evil.example), and
 # urlsplit silently drops CR/LF that would otherwise reach a Location header. The path class is
-# ASCII only with no backslash, "@", "?" or "#"; "_" is allowed for Goose's /oauth_callback. The
+# ASCII only with no backslash, "@", "?" or "#"; "_" is allowed (Goose's /oauth_callback). The
 # port is ASCII digits only (Python's \d also matches other scripts) and at most 65535.
 _PORT = r"(?:[0-9]{1,4}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])"
 _LOOPBACK = re.compile(r"http://(localhost|127\.0\.0\.1)(?::" + _PORT + r")?(/[A-Za-z0-9._~%/_-]*)?")

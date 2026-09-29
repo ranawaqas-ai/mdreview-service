@@ -70,7 +70,7 @@ Details, entry text and PR bodies are in `docs/submissions/third-party-directori
 Full analysis in `docs/submissions/other-clients-oauth.md`. Finding: `/oauth/register` rejects a whole request if any single redirect URI is off the allowlist, and Cursor and VS Code each register several at once, so both fail with a 400 today. Gemini CLI, Zed and the MCP Inspector already work (loopback).
 
 - [ ] Registration keeps the allowed redirect URIs and rejects only if none remain (RFC 7591 permits this). This unblocks Cursor and VS Code desktop without trusting a new host.
-- [ ] Add `_` to the loopback path characters so Goose works.
+- [x] Goose needed no change (its `/oauth_callback` was already allowed; the research said otherwise, and the security review corrected it).
 - [ ] Do not add `vscode.dev/redirect` (it forwards the code to any handler named in `state`) or `cursor://` (any local app can claim it).
 - [ ] ChatGPT needs RFC 9207 `iss` support and a live test first.
 - [ ] Tests for each change, mutation-checked, then an independent security review, because this is the list that stops code theft.

@@ -176,7 +176,9 @@ The portal text was not readable, so each line gives the subject named in the do
 ## Before you submit
 
 - [ ] Confirm the claude.ai account is on Pro, Max or higher.
-- [ ] Apply the wording, error and size fixes from the audit in `src/mcp/tools.py` and the API, release dev to main, and confirm tools/list on prod shows them.
+- [x] Wording fixes from the audit are applied in `src/mcp/tools.py` (and mirrored into the plugin copy). No capitalised MUST/NEVER/FIRST/PREFER directives remain in the tool descriptions except one `NOT` in `ping_working`.
+- [ ] Error messages, input validation (`status`, empty `markdown`) and a size guard from the audit are not done; they change API behaviour and need their own PR.
+- [ ] Release dev to main and confirm tools/list on prod shows the new wording.
 - [ ] Ship the reviewer demo login and fill the placeholder in the Test & launch text. Reviewers cannot read the emailed sign-in link.
 - [ ] `curl -sI https://app.mdreview.space/mcp` returns 401 or 405 from the same host with no 3xx redirect.
 - [ ] `curl -si -X POST https://app.mdreview.space/mcp` (no token) returns 401 with a `resource_metadata` header, and both `.well-known` documents return 200 from a public network.
