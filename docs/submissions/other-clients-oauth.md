@@ -1,6 +1,6 @@
 # Other MCP clients and the OAuth redirect allowlist
 
-Research only, no code changed. Facts were gathered on 2026-09-28. "Verified" means read in the vendor's own docs or open-source code, or observed directly in a public HTTP response. Anything else is marked unverified.
+Actions 1 and 2 shipped (see "What shipped" below); the rest is research only. Facts were gathered on 2026-09-28. "Verified" means read in the vendor's own docs or open-source code, or observed directly in a public HTTP response. Anything else is marked unverified.
 
 ## Summary
 
@@ -28,6 +28,18 @@ The set of URIs to add to `ALLOWED_REDIRECTS` right now is empty. That is a deli
 | Goose | `http://127.0.0.1:<port>/oauth_callback` | No, the underscore fails the path class | Add `_` to the path class | Negligible (loopback only) |
 | Cline | Unverified | Unknown | None | n/a |
 | Windsurf | Unverified | Unknown | None | n/a |
+
+## What shipped
+
+`_register` now drops well-formed redirect URIs that fail `redirect_allowed`, stores only the kept ones, and echoes only those in the 201 response. If none remain it returns the existing 400 `invalid_redirect_uri`. Malformed input is still a whole-request 400: a non-list, an empty list, a non-string element, an element over 2048 characters, or more than 10 URIs. Order does not matter, and authorize still checks `redirect_allowed` and `redirect_matches` on the requested URI, so a dropped URI is a 400 page with no redirect.
+
+`_` is now in the loopback path class, so Goose's `/oauth_callback` registers. While checking the regex against the rejection list, two loosenesses turned up and were fixed in the same expression: the port used `\d`, which matches non-ASCII digits, and it accepted ports above 65535. The port is now `[0-9]` and at most 65535 (`_PORT`).
+
+Still accepted, and not changed because fixing them is not a one-line change and the host is fixed to loopback: `..` path segments, `%2f` and `%5c` in the path, port 0 and leading-zero ports. None can change the host or split a header, and the path must match a registered path exactly.
+
+Tests are in `tests/oauth_selfcheck.py` (`registration_filter`): Cursor-shaped and VS Code-shaped sets in both orders, all-disallowed, mixed attacker lists in both orders, malformed input, Goose, and a list of URIs that must stay refused. Mutation checks: storing and echoing the unfiltered list fails the "echoing only the allowed URIs" and "only the allowed URI is echoed" cases, and a backslash in the path class fails "'http://localhost/cb\\x' alone is refused".
+
+Deliberately left out is unchanged: no new trusted host, no custom scheme, no `vscode.dev`, no ChatGPT entry, no `iss` (action 3).
 
 ## Findings by client
 
