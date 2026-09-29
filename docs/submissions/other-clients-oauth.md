@@ -9,7 +9,7 @@ The allowlist itself blocks fewer clients than registration does. `_register` in
 Recommended actions, in order:
 
 1. Filter at registration instead of rejecting (design change, no new trusted host).
-2. Add `_` to the loopback path character class so Goose works.
+2. ~~Add `_` to the loopback path character class so Goose works.~~ Not needed. Correction from the independent review of PR #416: the old class `[A-Za-z0-9._~%/-]` already contains `_` (through the literal run `._~`), so Goose's `/oauth_callback` already registered. The extra `_` in the pattern is redundant and harmless.
 3. Implement RFC 9207 `iss` in authorize responses, then consider one ChatGPT entry after a live test.
 4. Add nothing else now. `vscode.dev/redirect`, `cursor://` and the Cursor web callback stay out.
 
@@ -25,7 +25,7 @@ The set of URIs to add to `ALLOWED_REDIRECTS` right now is empty. That is a deli
 | Gemini CLI | `http://localhost:<random>/oauth/callback` | Yes | None | Existing |
 | Zed | `http://127.0.0.1:<random>/callback` (CIMD first, DCR fallback) | Yes | None | Existing |
 | MCP Inspector | `http://localhost:6274/oauth/callback` (web), `http://127.0.0.1:6276/oauth/callback` (CLI, TUI) | Yes | None | Existing |
-| Goose | `http://127.0.0.1:<port>/oauth_callback` | No, the underscore fails the path class | Add `_` to the path class | Negligible (loopback only) |
+| Goose | `http://127.0.0.1:<port>/oauth_callback` | Yes (corrected: the path class already allowed `_`) | None | Negligible (loopback only) |
 | Cline | Unverified | Unknown | None | n/a |
 | Windsurf | Unverified | Unknown | None | n/a |
 
@@ -33,7 +33,7 @@ The set of URIs to add to `ALLOWED_REDIRECTS` right now is empty. That is a deli
 
 `_register` now drops well-formed redirect URIs that fail `redirect_allowed`, stores only the kept ones, and echoes only those in the 201 response. If none remain it returns the existing 400 `invalid_redirect_uri`. Malformed input is still a whole-request 400: a non-list, an empty list, a non-string element, an element over 2048 characters, or more than 10 URIs. Order does not matter, and authorize still checks `redirect_allowed` and `redirect_matches` on the requested URI, so a dropped URI is a 400 page with no redirect.
 
-`_` is now in the loopback path class, so Goose's `/oauth_callback` registers. While checking the regex against the rejection list, two loosenesses turned up and were fixed in the same expression: the port used `\d`, which matches non-ASCII digits, and it accepted ports above 65535. The port is now `[0-9]` and at most 65535 (`_PORT`).
+The pattern now spells `_` out in the loopback path class, but it was already allowed, so Goose's `/oauth_callback` registered before this change too. While checking the regex against the rejection list, two loosenesses turned up and were fixed in the same expression: the port used `\d`, which matches non-ASCII digits, and it accepted ports above 65535. The port is now `[0-9]` and at most 65535 (`_PORT`).
 
 Still accepted, and not changed because fixing them is not a one-line change and the host is fixed to loopback: `..` path segments, `%2f` and `%5c` in the path, port 0 and leading-zero ports. None can change the host or split a header, and the path must match a registered path exactly.
 
