@@ -46,6 +46,10 @@ services:
       # Reviewer sign-in at /auth/demo (docs/operations/demo-login.md). Name only. The value lives in
       # the host .env. Empty keeps the route off (it then 404s); a set value under 32 chars refuses boot.
       MDREVIEW_DEMO_LOGIN_KEY: "${MDREVIEW_DEMO_LOGIN_KEY:-}"
+      # Umami page-view tag (src/mdreview/analytics.py). Names only, values in the host .env. Empty
+      # (the default) sends every page unchanged. Staging does not declare these on purpose.
+      MDREVIEW_UMAMI_SRC: "${MDREVIEW_UMAMI_SRC:-}"
+      MDREVIEW_UMAMI_WEBSITE_ID: "${MDREVIEW_UMAMI_WEBSITE_ID:-}"
     networks:
       - mdrnet
 

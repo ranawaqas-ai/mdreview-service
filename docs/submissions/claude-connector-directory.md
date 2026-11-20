@@ -141,7 +141,7 @@ Choose OAuth with dynamic client registration (`oauth_dcr`). Do not choose CIMD 
 |---|---|
 | Whose API is behind the connector | Our own. mdreview is the developer's own first-party service. No partner API and no third-party API is proxied. |
 | Personal health data | No. The service does not target or collect it. Users could type anything into a document, which the privacy policy covers as user content. |
-| Sponsored content | No. No ads, no promotion, no analytics. |
+| Sponsored content | No. No ads and no promotion. Since 2026-11 the hosted service counts page views with a self-hosted, cookieless Umami (no third party). |
 
 ### 8. Test and launch
 

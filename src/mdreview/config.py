@@ -13,6 +13,10 @@ WEB_DIR = os.environ.get("MDREVIEW_WEB_DIR") or os.path.join(
 DATA_DIR = os.environ.get("MDREVIEW_DATA", "/data")
 PORT = int(os.environ.get("PORT", "8080"))
 PUBLIC_BASE = os.environ.get("MDREVIEW_PUBLIC_BASE", "").rstrip("/")
+# Optional Umami page-view tag (mdreview.analytics). Both must be set or no page is changed, which
+# is the default for every self-hosted install: the public image must not phone anyone's analytics.
+UMAMI_SRC = os.environ.get("MDREVIEW_UMAMI_SRC", "").strip()
+UMAMI_WEBSITE_ID = os.environ.get("MDREVIEW_UMAMI_WEBSITE_ID", "").strip()
 
 # --- Phase 1 multi-user auth (hosted). OFF by default so local/dev stays open + single-user. ---
 # When ON, every request must resolve to a user: browser via a trusted proxy header, agent via a
