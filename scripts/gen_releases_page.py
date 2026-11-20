@@ -142,6 +142,7 @@ HEAD = """<!DOCTYPE html>
     .card{padding:22px 20px}
   }
 </style>
+<script defer src="https://stats.waqasrana.space/script.js" data-website-id="10879eaf-0785-4f0a-b6db-3a303993f931" data-domains="mdreview.space"></script>
 </head>
 <body>
 """

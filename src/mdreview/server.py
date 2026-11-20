@@ -58,6 +58,7 @@ from mdreview.config import (
 from mdreview.access import OperatorIdentity, OpenPolicy, OwnerPolicy, ProxyBearerIdentity
 from mdreview.errors import ReviewWriteRejected
 from mdreview import latexguard
+from mdreview.analytics import with_analytics
 from mdreview.store import Store
 from mdreview.comments import CommentService
 from mdreview.assets import AssetService
@@ -511,7 +512,7 @@ class H(BaseHTTPRequestHandler):
             }
             if path == "/api" or "application/json" in self.headers.get("Accept", ""):
                 return self._json(200, descriptor)
-            return self._send(200, app.store.read_text(os.path.join(WEB_DIR, "dashboard.html")),
+            return self._send(200, with_analytics(app.store.read_text(os.path.join(WEB_DIR, "dashboard.html"))),
                               "text/html; charset=utf-8")
 
         # Account + per-user API tokens (cookie plane ONLY: an agent token can never mint/revoke a
@@ -520,7 +521,7 @@ class H(BaseHTTPRequestHandler):
             p = self._require_user()
             if p is None:
                 return
-            return self._send(200, app.store.read_text(os.path.join(WEB_DIR, "account.html")),
+            return self._send(200, with_analytics(app.store.read_text(os.path.join(WEB_DIR, "account.html"))),
                               "text/html; charset=utf-8")
         if path == "/account/tokens":
             p = self._require_user()
@@ -1058,7 +1059,7 @@ class H(BaseHTTPRequestHandler):
             uid, plane = self._authz(rid)      # non-owner (or unauth) gets 404, no viewer shell leak
             if plane is None:
                 return
-            return self._send(200, app.store.read_text(os.path.join(WEB_DIR, "viewer.html")),
+            return self._send(200, with_analytics(app.store.read_text(os.path.join(WEB_DIR, "viewer.html")), fixed_path=True),
                               "text/html; charset=utf-8", extra_headers=NOINDEX)
 
         mo = re.fullmatch(r"/static/([A-Za-z0-9._-]+)", path)

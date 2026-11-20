@@ -143,4 +143,4 @@ The runbooks that used to live here, moved out so this page stays readable:
 
 ## Privacy Policy
 
-The hosted service at app.mdreview.space stores your account email, your reviews and comments, and sign-in security records. It uses no analytics or tracking cookies, does not sell your data and does not use it to train AI models. The full policy, including retention, deletion and third-party services, is at <https://mdreview.space/privacy/>. Questions go to rana.waqas.works@gmail.com. A self-hosted instance keeps all data on your machine.
+The hosted service at app.mdreview.space stores your account email, your reviews and comments, and sign-in security records. It counts page views with a self-hosted, cookieless Umami that never records which review you opened. It uses no tracking cookies, does not sell your data and does not use it to train AI models. The full policy, including retention, deletion and third-party services, is at <https://mdreview.space/privacy/>. Questions go to rana.waqas.works@gmail.com. A self-hosted instance keeps all data on your machine.
